@@ -1,6 +1,14 @@
-# CCS build output
-Debug/
-Release/
+# CCS workspace state
+.metadata/
+.jxbrowser.userdata/
+.tempFiles/
+dvt/
+RemoteSystemsTempFiles/
+2_ADC_SCI_GPIO/
+
+# CCS project build output
+**/Debug/
+**/Release/
 *.out
 *.hex
 *.map
@@ -9,13 +17,7 @@ Release/
 *.o
 *.d
 *.d_raw
-
-# CCS/Eclipse generated state
-.metadata/
 *.cdtInfo
-
-# Stale launch configuration from the former project name
-.launches/SCI_ADC_GPIO_PWM.launch
 
 # Editor and operating-system state
 Thumbs.db
