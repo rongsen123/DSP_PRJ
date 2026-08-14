@@ -11,7 +11,7 @@
 - SOC0、SOC1、SOC2 按顺序采集三路模拟信号。
 - SOC2 转换完成产生 EOC2，并由 EOC2 触发 ADCINT1。
 - ADCINT1 服务函数读取三路原始结果、清除 ADC 标志并应答 PIE。
-- 主循环完成电流零漂校准、ADC 引脚电压换算和实际电压/电流换算。
+- 主循环完成电流零漂校准、ADC 引脚电压换算、交流电流低通滤波和真有效值计算。
 - 启动时将 `ramfuncs` 从 Flash 装载地址复制到 RAM 运行地址，确保 `DELAY_US()` 正常执行。
 
 ## ADC通道与时序
@@ -62,6 +62,14 @@ ADC引脚电压 = raw * 3.0 / 4096
 
 浮点换算和零漂累加不在 ADC ISR 中执行。ADC ISR 保持最小路径，主循环调用 `adc_process()` 处理已经发布的一组三通道数据，避免高优先级中断占用过长影响 SCI。
 
+## 交流电流滤波与有效值
+
+`adc_value.iac_a` 保留零点扣除后的瞬时交流电流。程序对它增加一阶低通滤波：采样率 10 kHz、截止频率 500 Hz，结果为 `adc_value.iac_filtered_a`。该截止频率对 50 Hz、60 Hz 基波的幅值衰减均小于 1%，同时能够降低高频开关纹波和 ADC 抖动。
+
+有效值使用 2000 个滤波后样本计算，窗口为 200 ms（50 Hz 的 10 周期、60 Hz 的 12 周期）。计算公式为 `sqrt(mean(i*i) - mean(i)^2)`，因此残余直流偏置不会被计入交流有效值。第一窗完成后 `adc_iac_status.rms_valid` 置 1，`adc_value.iac_rms_a` 每 200 ms 更新一次，可直接与交流电流源给定的 RMS 值比较。
+
+若 `adc_iac_status.dropped_count` 持续增加，说明主循环来不及处理 10 kHz 数据，此时有效值窗口的时间尺度不再准确，应先排查后台阻塞或降低采样率。
+
 ## CCS Debug观察变量
 
 程序运行后，可在 Expressions 中观察：
@@ -80,6 +88,13 @@ adc_value.iac_pin_v
 adc_value.vdc_bus_v
 adc_value.idc_a
 adc_value.iac_a
+adc_value.iac_filtered_a
+adc_value.iac_rms_a
+adc_iac_status.rms_valid
+adc_iac_status.rms_sample_count
+adc_iac_status.rms_update_count
+adc_iac_status.processed_count
+adc_iac_status.dropped_count
 adc_zero_calibration.state
 adc_zero_calibration.sample_count
 adc_zero_calibration.idc_offset_count
@@ -93,6 +108,8 @@ adc_zero_calibration.iac_offset_count
 - `adc_sample_count` 约以 10000 次/秒增加；
 - `adc_zero_calibration.state` 最终变为 `2`；
 - `adc_overflow_count` 应保持为 0 或极少变化。
+- `adc_iac_status.rms_valid == 1` 后，`adc_value.iac_rms_a` 才是可用的交流有效值；
+- `adc_iac_status.dropped_count` 应保持为 0。
 
 ## SCI配置
 
