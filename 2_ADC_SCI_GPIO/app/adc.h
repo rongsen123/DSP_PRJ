@@ -22,6 +22,17 @@
 #define ADC_CURRENT_AMPS_PER_COUNT   0.09887695f
 
 /*
+ * First-order low-pass for the AC-current waveform.  A 500 Hz cutoff keeps
+ * 50/60 Hz amplitude error below 1% while suppressing switching/ADC noise.
+ * alpha = 1 - exp(-2*pi*fc/fs), for fs = 10 kHz and fc = 500 Hz.
+ */
+#define ADC_IAC_FILTER_CUTOFF_HZ      500.0f
+#define ADC_IAC_FILTER_ALPHA          0.2695973f
+
+/* 200 ms contains exactly 10 cycles at 50 Hz and 12 cycles at 60 Hz. */
+#define ADC_IAC_RMS_WINDOW_SAMPLES    2000U
+
+/*
  * Average 1024 samples (102.4 ms at 10 kHz) once after startup.  The power
  * stage must be disabled and both current sensors must carry zero current.
  */
@@ -46,7 +57,18 @@ typedef struct
     float vdc_bus_v;            /* Real DC bus voltage */
     float idc_a;                /* Real DC current */
     float iac_a;                /* Real AC current */
+    float iac_filtered_a;       /* Low-pass-filtered AC-current waveform */
+    float iac_rms_a;            /* 200 ms true RMS, residual DC removed */
 } ADC_ANALOG_VALUE;
+
+typedef struct
+{
+    Uint16 rms_sample_count;    /* Samples accumulated in current RMS window */
+    Uint16 rms_valid;           /* 1 after the first complete 200 ms window */
+    Uint32 rms_update_count;    /* Number of completed RMS windows */
+    Uint32 processed_count;     /* Samples consumed by adc_process() */
+    Uint32 dropped_count;       /* ISR samples overwritten before processing */
+} ADC_IAC_MEASUREMENT_STATUS;
 
 typedef struct
 {
@@ -59,6 +81,7 @@ typedef struct
 extern volatile ADC_SAMPLE adc_sample;
 extern volatile ADC_ANALOG_VALUE adc_value;
 extern volatile ADC_ZERO_CALIBRATION adc_zero_calibration;
+extern volatile ADC_IAC_MEASUREMENT_STATUS adc_iac_status;
 extern volatile Uint16 adc_data_ready;
 extern volatile Uint32 adc_sample_count;
 extern volatile Uint32 adc_overflow_count;

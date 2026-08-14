@@ -1,9 +1,11 @@
 #include "DSP28x_Project.h"
+#include <math.h>
 #include "adc.h"
 
 volatile ADC_SAMPLE adc_sample = {0, 0, 0};
 volatile ADC_ANALOG_VALUE adc_value = {0.0f, 0.0f, 0.0f,
-                                      0.0f, 0.0f, 0.0f};
+                                      0.0f, 0.0f, 0.0f,
+                                      0.0f, 0.0f};
 volatile ADC_ZERO_CALIBRATION adc_zero_calibration =
 {
     2048.0f,
@@ -14,14 +16,28 @@ volatile ADC_ZERO_CALIBRATION adc_zero_calibration =
 volatile Uint16 adc_data_ready = 0;
 volatile Uint32 adc_sample_count = 0;
 volatile Uint32 adc_overflow_count = 0;
+volatile ADC_IAC_MEASUREMENT_STATUS adc_iac_status =
+{
+    0U,
+    0U,
+    0UL,
+    0UL,
+    0UL
+};
 
 static Uint32 idc_zero_sum = 0UL;
 static Uint32 iac_zero_sum = 0UL;
+static Uint32 last_processed_sample_count = 0UL;
+static float iac_rms_sum = 0.0f;
+static float iac_rms_square_sum = 0.0f;
+static Uint16 iac_filter_initialized = 0U;
 
 static void adc_soc_init(void);
 static void epwm1_adc_trigger_init(void);
 static void adc_update_zero_calibration(const ADC_SAMPLE *sample);
 static void adc_convert_to_analog(const ADC_SAMPLE *sample);
+static void adc_update_iac_measurement(void);
+static void adc_reset_iac_measurement(void);
 
 void adc_init(void)
 {
@@ -137,6 +153,7 @@ void adc_stop(void)
 void adc_process(void)
 {
     ADC_SAMPLE sample;
+    Uint32 published_sample_count;
 
     if(adc_data_ready == 0U)
     {
@@ -148,12 +165,22 @@ void adc_process(void)
     sample.vdc_raw = adc_sample.vdc_raw;
     sample.idc_raw = adc_sample.idc_raw;
     sample.iac_raw = adc_sample.iac_raw;
+    published_sample_count = adc_sample_count;
     adc_data_ready = 0U;
     EINT;
+
+    if(last_processed_sample_count != 0UL)
+    {
+        adc_iac_status.dropped_count +=
+            published_sample_count - last_processed_sample_count - 1UL;
+    }
+    last_processed_sample_count = published_sample_count;
+    adc_iac_status.processed_count++;
 
     /* Keep floating-point conversion and calibration out of the ADC ISR. */
     adc_update_zero_calibration(&sample);
     adc_convert_to_analog(&sample);
+    adc_update_iac_measurement();
 }
 
 void adc_zero_calibration_start(void)
@@ -162,6 +189,7 @@ void adc_zero_calibration_start(void)
     iac_zero_sum = 0UL;
     adc_zero_calibration.sample_count = 0U;
     adc_zero_calibration.state = ADC_CALIBRATION_RUNNING;
+    adc_reset_iac_measurement();
 }
 
 static void adc_update_zero_calibration(const ADC_SAMPLE *sample)
@@ -206,6 +234,69 @@ static void adc_convert_to_analog(const ADC_SAMPLE *sample)
     adc_value.iac_a =
         ((float)sample->iac_raw - adc_zero_calibration.iac_offset_count) *
         ADC_CURRENT_AMPS_PER_COUNT;
+}
+
+static void adc_reset_iac_measurement(void)
+{
+    iac_rms_sum = 0.0f;
+    iac_rms_square_sum = 0.0f;
+    iac_filter_initialized = 0U;
+    adc_value.iac_filtered_a = 0.0f;
+    adc_value.iac_rms_a = 0.0f;
+    adc_iac_status.rms_sample_count = 0U;
+    adc_iac_status.rms_valid = 0U;
+    adc_iac_status.rms_update_count = 0UL;
+}
+
+static void adc_update_iac_measurement(void)
+{
+    float filtered;
+    float mean;
+    float mean_square;
+    float ac_mean_square;
+
+    /* Do not publish a current measurement based on the provisional offset. */
+    if(adc_zero_calibration.state != ADC_CALIBRATION_DONE)
+    {
+        return;
+    }
+
+    if(iac_filter_initialized == 0U)
+    {
+        adc_value.iac_filtered_a = adc_value.iac_a;
+        iac_filter_initialized = 1U;
+    }
+    else
+    {
+        adc_value.iac_filtered_a += ADC_IAC_FILTER_ALPHA *
+            (adc_value.iac_a - adc_value.iac_filtered_a);
+    }
+
+    filtered = adc_value.iac_filtered_a;
+    iac_rms_sum += filtered;
+    iac_rms_square_sum += filtered * filtered;
+    adc_iac_status.rms_sample_count++;
+
+    if(adc_iac_status.rms_sample_count >= ADC_IAC_RMS_WINDOW_SAMPLES)
+    {
+        mean = iac_rms_sum / (float)ADC_IAC_RMS_WINDOW_SAMPLES;
+        mean_square = iac_rms_square_sum /
+            (float)ADC_IAC_RMS_WINDOW_SAMPLES;
+        ac_mean_square = mean_square - (mean * mean);
+
+        /* Roundoff can make a near-zero result slightly negative. */
+        if(ac_mean_square < 0.0f)
+        {
+            ac_mean_square = 0.0f;
+        }
+
+        adc_value.iac_rms_a = sqrtf(ac_mean_square)*1.25;
+        adc_iac_status.rms_sample_count = 0U;
+        adc_iac_status.rms_valid = 1U;
+        adc_iac_status.rms_update_count++;
+        iac_rms_sum = 0.0f;
+        iac_rms_square_sum = 0.0f;
+    }
 }
 
 interrupt void AdcInt1Isr(void)
