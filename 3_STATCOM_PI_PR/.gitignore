@@ -1,0 +1,33 @@
+# CCS build output
+Debug/
+Release/
+*.out
+*.hex
+*.map
+*.lst
+*.obj
+*.o
+*.d
+*.d_raw
+
+# CCS/Eclipse generated state
+.metadata/
+*.cdtInfo
+
+# Stale launch configuration from the former project name
+.launches/3_STATCOM_PI_PR.previous.launch.disabled
+
+# Editor and operating-system state
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Python host-tool generated files
+docs/statcom_host/build/
+docs/statcom_host/dist/
+**/__pycache__/
+*.pyc

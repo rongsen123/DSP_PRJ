@@ -1,0 +1,24 @@
+flowchart TB
+    subgraph DSP["DSP板卡：算法与监督"]
+      ADC0["ADCINA0：电网正半波"]
+      ADC2["ADCINA2：交流电流"]
+      CTRL["PLL + PI + PR\n分阶段启用"]
+      FSM["安全状态机\nBOOT/VERIFY/SHADOW/RUN/FAULT"]
+    end
+    subgraph FIBER["双向光纤接口"]
+      UP["CPLD→DSP\nVdc、状态、故障、心跳"]
+      DOWN["DSP→CPLD\nSTOP/RUN、复位、PWM相关量"]
+    end
+    subgraph CPLD["CPLD板卡：确定性执行与硬件安全"]
+      VADC["直流母线ADC"]
+      WD["通信超时/看门狗"]
+      PWM["PWM、互补、死区、封锁"]
+      PROT["过流/过压/驱动故障锁存"]
+    end
+    ADC0 --> CTRL
+    ADC2 --> CTRL
+    CTRL --> FSM --> DOWN --> PWM
+    VADC --> UP --> FSM
+    PROT --> UP
+    WD --> PWM
+    PROT --> PWM
