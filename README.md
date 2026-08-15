@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | [1_SCI_GPIO](1_SCI_GPIO/) | TMS320F28062 | 基于 SCI 收发中断实现光纤串口问答通信、协议帧解析校验及 LED 状态指示。 |
 | [2_ADC_SCI_GPIO](2_ADC_SCI_GPIO/) | TMS320F28062 | 在 SCI 通信基础上增加 ePWM 触发的 10 kHz 三通道 ADC 中断采集、零漂校准及模拟量换算。 |
+| [3_STATCOM_PI_PR](3_STATCOM_PI_PR/) | TMS320F28062 | 20 kHz三通道ADC、半波SOGI-PLL及双SCI Modbus RTU通信调试；功率输出保持硬封锁。 |
 | [PLECS_prj](PLECS_prj/) | PLECS | 低压全桥整流仿真工程，用于后续控制策略与功率回路联合验证。 |
 
 ## 开发环境

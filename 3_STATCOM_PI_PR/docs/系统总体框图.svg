@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#334155"/></marker>
+    <style>
+      .title{font:700 34px 'Microsoft YaHei',sans-serif;fill:#0f172a}.h{font:700 22px 'Microsoft YaHei',sans-serif;fill:#0f172a}.t{font:18px 'Microsoft YaHei',sans-serif;fill:#1e293b}.s{font:15px 'Microsoft YaHei',sans-serif;fill:#475569}.box{stroke:#334155;stroke-width:2;rx:14}.confirmed{fill:#e8f5e9}.planned{fill:#fff8e1}.unknown{fill:#ffebee}.line{stroke:#334155;stroke-width:2.5;fill:none;marker-end:url(#arrow)}.dash{stroke:#b45309;stroke-width:2.5;stroke-dasharray:8 7;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#f8fafc"/>
+  <text x="800" y="55" text-anchor="middle" class="title">3号CCS工程：单相STATCOM系统总体框图</text>
+  <text x="80" y="112" class="h">功率主回路</text>
+  <rect x="70" y="140" width="210" height="105" class="box confirmed"/><text x="175" y="180" text-anchor="middle" class="h">单相电网</text><text x="175" y="215" text-anchor="middle" class="t">220 V rms / 50 Hz</text>
+  <rect x="350" y="140" width="210" height="105" class="box confirmed"/><text x="455" y="180" text-anchor="middle" class="h">并网电抗器</text><text x="455" y="215" text-anchor="middle" class="t">L = 0.5 mH</text>
+  <rect x="640" y="140" width="220" height="105" class="box confirmed"/><text x="750" y="180" text-anchor="middle" class="h">单相全桥</text><text x="750" y="215" text-anchor="middle" class="t">四开关功率级</text>
+  <rect x="940" y="140" width="260" height="105" class="box confirmed"/><text x="1070" y="180" text-anchor="middle" class="h">直流母线</text><text x="1070" y="215" text-anchor="middle" class="t">4×650 μF = 2.6 mF</text>
+  <path d="M280 192 H350" class="line"/><path d="M560 192 H640" class="line"/><path d="M860 192 H940" class="line"/>
+  <text x="80" y="340" class="h">采样、控制与光纤通信</text>
+  <rect x="70" y="375" width="260" height="145" class="box confirmed"/><text x="200" y="415" text-anchor="middle" class="h">DSP模拟量</text><text x="200" y="455" text-anchor="middle" class="t">ADCINA0：电网正半波</text><text x="200" y="488" text-anchor="middle" class="t">ADCINA2：电抗器电流</text>
+  <rect x="420" y="350" width="360" height="205" class="box planned"/><text x="600" y="392" text-anchor="middle" class="h">DSP TMS320F28062</text><text x="600" y="430" text-anchor="middle" class="t">半波重构 + SOGI-PLL</text><text x="600" y="463" text-anchor="middle" class="t">PI直流电压外环 + PR电流内环</text><text x="600" y="496" text-anchor="middle" class="t">i* = Ip·sinθ − Iq·cosθ</text><text x="600" y="530" text-anchor="middle" class="s">首版：ADC_VERIFY，PWM永久封锁</text>
+  <rect x="920" y="350" width="360" height="205" class="box confirmed"/><text x="1100" y="392" text-anchor="middle" class="h">CPLD安全执行器</text><text x="1100" y="430" text-anchor="middle" class="t">直流母线ADC采样</text><text x="1100" y="463" text-anchor="middle" class="t">PWM / 互补 / 死区 / 封锁</text><text x="1100" y="496" text-anchor="middle" class="t">过流、过压、驱动故障锁存</text><text x="1100" y="530" text-anchor="middle" class="s">CPLD功能基本完成，待联调</text>
+  <path d="M330 448 H420" class="line"/><path d="M1070 245 V350" class="line"/><path d="M920 425 H790" class="dash"/><text x="855" y="407" text-anchor="middle" class="s">Vdc / 状态 / 故障</text><path d="M780 500 H910" class="dash"/><text x="845" y="485" text-anchor="middle" class="s">PWM相关量 / 使能 / 复位</text><path d="M1100 350 V275 H750 V245" class="line"/>
+  <rect x="1325" y="350" width="220" height="205" class="box unknown"/><text x="1435" y="392" text-anchor="middle" class="h">必须冻结</text><text x="1435" y="432" text-anchor="middle" class="t">光纤物理接口</text><text x="1435" y="465" text-anchor="middle" class="t">活动帧协议</text><text x="1435" y="498" text-anchor="middle" class="t">实时PWM归属</text><text x="1435" y="531" text-anchor="middle" class="t">超时安全策略</text>
+  <path d="M1280 452 H1325" class="dash"/>
+  <text x="80" y="670" class="h">逐步验证路径</text>
+  <g class="t"><rect x="70" y="710" width="180" height="72" class="box confirmed"/><text x="160" y="754" text-anchor="middle">0 工程/封锁</text><rect x="285" y="710" width="180" height="72" class="box confirmed"/><text x="375" y="754" text-anchor="middle">1 ADC标定</text><rect x="500" y="710" width="180" height="72" class="box planned"/><text x="590" y="754" text-anchor="middle">2 光纤只读</text><rect x="715" y="710" width="180" height="72" class="box planned"/><text x="805" y="754" text-anchor="middle">3 PLL监视</text><rect x="930" y="710" width="180" height="72" class="box planned"/><text x="1020" y="754" text-anchor="middle">4 PI/PR影子</text><rect x="1145" y="710" width="180" height="72" class="box planned"/><text x="1235" y="754" text-anchor="middle">5 低压闭环</text><rect x="1360" y="710" width="170" height="72" class="box planned"/><text x="1445" y="754" text-anchor="middle">6 逐级升压</text></g>
+  <path d="M250 746 H285 M465 746 H500 M680 746 H715 M895 746 H930 M1110 746 H1145 M1325 746 H1360" class="line"/>
+  <rect x="70" y="832" width="22" height="22" class="confirmed" stroke="#334155"/><text x="102" y="850" class="s">已确认/已继承</text><rect x="270" y="832" width="22" height="22" class="planned" stroke="#334155"/><text x="302" y="850" class="s">计划实现或待复测</text><rect x="510" y="832" width="22" height="22" class="unknown" stroke="#334155"/><text x="542" y="850" class="s">尚未确认，禁止猜测</text>
+</svg>
