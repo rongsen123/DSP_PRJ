@@ -15,6 +15,9 @@ typedef struct
     Uint16 command_echo;
     Uint16 remote_valid_frames;
     Uint16 remote_error_frames;
+    Uint16 remote_uart_errors;
+    Uint16 remote_crc_errors;
+    Uint16 remote_incomplete_frames;
     Uint16 link_flags;
     Uint16 valid;
     Uint32 age_ticks;

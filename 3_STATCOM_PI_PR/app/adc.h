@@ -27,6 +27,13 @@
  */
 #define ADC_ZERO_CALIBRATION_SAMPLES 1024U
 
+/*
+ * ADC ISR只负责采样入队；主循环逐点执行零漂、模拟量换算和PLL。
+ * 256组缓存可覆盖约12.8 ms，可跨越SCI-B长回复与相邻SCI-A请求。
+ */
+#define ADC_PROCESS_QUEUE_SIZE       256U
+#define ADC_PROCESS_QUEUE_MASK       (ADC_PROCESS_QUEUE_SIZE - 1U)
+
 #define ADC_CALIBRATION_IDLE         0U
 #define ADC_CALIBRATION_RUNNING      1U
 #define ADC_CALIBRATION_DONE         2U
@@ -62,6 +69,7 @@ extern volatile ADC_ZERO_CALIBRATION adc_zero_calibration;
 extern volatile Uint16 adc_data_ready;
 extern volatile Uint32 adc_sample_count;
 extern volatile Uint32 adc_overflow_count;
+extern volatile Uint32 adc_queue_overflow_count;
 extern volatile Uint32 adc_isr_last_cycles;
 extern volatile Uint32 adc_isr_max_cycles;
 extern volatile float grid_halfwave_mean_counts;

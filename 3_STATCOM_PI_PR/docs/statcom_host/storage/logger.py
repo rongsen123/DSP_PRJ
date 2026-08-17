@@ -1,6 +1,6 @@
 """CSV 数据记录器与事件日志模块。
 
-支持开始/停止记录实时数据为 CSV 文件，格式包含本机时间戳、DSP运行时间、全部原始寄存器与换算量。
+支持开始/停止记录实时数据为 CSV 文件，包含本机时间戳、DSP运行时间、全部原始寄存器与换算量。
 """
 
 from __future__ import annotations
@@ -23,9 +23,11 @@ class DataLogger:
         "grid_halfwave_V",
         "iac_raw",
         "iac_A",
+        "cpld_vdc_V",
         "cpld_vdc_raw",
         "cpld_vdc_average",
-        "temperature_count",
+        "temperature_frequency_Hz",
+        "temperature_count_100ms",
         "cpld_status_hex",
         "cpld_fault_hex",
         "cpld_link_hex",
@@ -37,6 +39,12 @@ class DataLogger:
         "dsp_cpld_errors",
         "pc_dsp_errors",
         "cpld_command_echo",
+        "cpld_uart_error_count",
+        "cpld_crc_error_count",
+        "cpld_incomplete_frame_count",
+        "dsp_scia_format_error_count",
+        "dsp_scia_overflow_count",
+        "dsp_cpld_timeout_count",
         "dsp_online",
     ]
 
@@ -82,7 +90,7 @@ class DataLogger:
             return
 
         now_str = time.strftime("%Y-%m-%d %H:%M:%S.") + f"{int((time.time() % 1) * 1000):03d}"
-        
+
         row = [
             now_str,
             data.get("uptime_ms", 0),
@@ -91,8 +99,10 @@ class DataLogger:
             data.get("grid_voltage", 0.0),
             data.get("iac_raw", 0),
             data.get("iac", 0.0),
+            data.get("cpld_vdc_v", 0.0),
             data.get("cpld_vdc_raw", 0),
             data.get("cpld_vdc_average", 0),
+            data.get("temperature_frequency_hz", 0.0),
             data.get("temperature_count", 0),
             f"0x{raw_values[11]:04X}" if raw_values and len(raw_values) > 11 else "",
             f"0x{data.get('cpld_fault_raw', 0):08X}",
@@ -105,6 +115,12 @@ class DataLogger:
             data.get("dsp_cpld_error_count", 0),
             data.get("pc_dsp_error_count", 0),
             data.get("cpld_command_echo", ""),
+            data.get("cpld_uart_error_count", 0),
+            data.get("cpld_crc_error_count", 0),
+            data.get("cpld_incomplete_frame_count", 0),
+            data.get("dsp_scia_format_error_count", 0),
+            data.get("dsp_scia_overflow_count", 0),
+            data.get("dsp_cpld_timeout_count", 0),
             1 if data.get("dsp_online", True) else 0,
         ]
         self._csv_writer.writerow(row)

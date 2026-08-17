@@ -3,7 +3,7 @@
 volatile CPLD_LINK_STATUS cpld_link_status =
 {
     0.0,
-    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
     0,
     0, 0, 0, 0, 0,
     0
