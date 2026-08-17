@@ -16,6 +16,7 @@ volatile ADC_ZERO_CALIBRATION adc_zero_calibration =
 volatile Uint16 adc_data_ready = 0;
 volatile Uint32 adc_sample_count = 0;
 volatile Uint32 adc_overflow_count = 0;
+volatile Uint32 adc_queue_overflow_count = 0;
 volatile Uint32 adc_isr_last_cycles = 0UL;
 volatile Uint32 adc_isr_max_cycles = 0UL;
 volatile float grid_halfwave_mean_counts = 0.0F;
@@ -31,11 +32,15 @@ static Uint16 grid_dc_index = 0U;
 static Uint16 grid_dc_count = 0U;
 static Uint16 grid_samples_since_positive = GRID_SIGNAL_LOSS_SAMPLES;
 static Uint16 grid_clip_count = 0U;
+static volatile ADC_SAMPLE adc_process_queue[ADC_PROCESS_QUEUE_SIZE];
+static volatile Uint16 adc_queue_head = 0U;
+static volatile Uint16 adc_queue_tail = 0U;
 
 static void adc_soc_init(void);
 static void epwm1_adc_trigger_init(void);
 static void adc_update_zero_calibration(const ADC_SAMPLE *sample);
 static void adc_convert_to_analog(const ADC_SAMPLE *sample);
+static void grid_pll_process_sample(Uint16 grid_raw);
 
 void adc_init(void)
 {
@@ -159,23 +164,28 @@ void adc_stop(void)
 void adc_process(void)
 {
     ADC_SAMPLE sample;
+    Uint16 tail;
 
-    if(adc_data_ready == 0U)
+    if(adc_queue_head == adc_queue_tail)
     {
+        adc_data_ready = 0U;
         return;
     }
 
-    /* Copy one coherent sample set, then release the ISR to publish another. */
+    /* 每次主循环处理一个完整样本；SCI中断可在后续浮点计算期间抢占。 */
     DINT;
-    sample.vdc_raw = adc_sample.vdc_raw;
-    sample.idc_raw = adc_sample.idc_raw;
-    sample.iac_raw = adc_sample.iac_raw;
-    adc_data_ready = 0U;
+    tail = adc_queue_tail;
+    sample.vdc_raw = adc_process_queue[tail].vdc_raw;
+    sample.idc_raw = adc_process_queue[tail].idc_raw;
+    sample.iac_raw = adc_process_queue[tail].iac_raw;
+    adc_queue_tail = (tail + 1U) & ADC_PROCESS_QUEUE_MASK;
+    adc_data_ready = (adc_queue_tail != adc_queue_head) ? 1U : 0U;
     EINT;
 
-    /* Keep floating-point conversion and calibration out of the ADC ISR. */
+    /* 浮点和PLL全部在可被SCI抢占的前台执行，并保持逐样本顺序。 */
     adc_update_zero_calibration(&sample);
     adc_convert_to_analog(&sample);
+    grid_pll_process_sample(sample.vdc_raw);
 }
 
 void adc_zero_calibration_start(void)
@@ -232,20 +242,12 @@ static void adc_convert_to_analog(const ADC_SAMPLE *sample)
         ADC_CURRENT_AMPS_PER_COUNT;
 }
 
-interrupt void AdcInt1Isr(void)
+static void grid_pll_process_sample(Uint16 grid_raw)
 {
-    Uint32 isr_start_cycles = CpuTimer1Regs.TIM.all;
-    Uint16 grid_raw;
     Uint16 old_raw;
     float mean_counts;
     float centered_pu;
 
-    /* EOC2 has occurred, so ADCRESULT0-2 all belong to this sample set. */
-    adc_sample.vdc_raw = AdcResult.ADCRESULT0;
-    adc_sample.idc_raw = AdcResult.ADCRESULT1;
-    adc_sample.iac_raw = AdcResult.ADCRESULT2;
-
-    grid_raw = adc_sample.vdc_raw;
     if(grid_dc_count < GRID_DC_WINDOW_SAMPLES)
     {
         grid_dc_window[grid_dc_index] = grid_raw;
@@ -299,9 +301,37 @@ interrupt void AdcInt1Isr(void)
     grid_halfwave_mean_counts = mean_counts;
     grid_halfwave_centered_pu = centered_pu;
     GridPll_Run(centered_pu, grid_halfwave_signal_valid);
+}
+
+interrupt void AdcInt1Isr(void)
+{
+    Uint32 isr_start_cycles = CpuTimer1Regs.TIM.all;
+    Uint16 next_head;
+    ADC_SAMPLE sample;
+
+    /* EOC2 has occurred, so ADCRESULT0-2 all belong to this sample set. */
+    sample.vdc_raw = AdcResult.ADCRESULT0;
+    sample.idc_raw = AdcResult.ADCRESULT1;
+    sample.iac_raw = AdcResult.ADCRESULT2;
+    adc_sample.vdc_raw = sample.vdc_raw;
+    adc_sample.idc_raw = sample.idc_raw;
+    adc_sample.iac_raw = sample.iac_raw;
+
+    next_head = (adc_queue_head + 1U) & ADC_PROCESS_QUEUE_MASK;
+    if(next_head != adc_queue_tail)
+    {
+        adc_process_queue[adc_queue_head].vdc_raw = sample.vdc_raw;
+        adc_process_queue[adc_queue_head].idc_raw = sample.idc_raw;
+        adc_process_queue[adc_queue_head].iac_raw = sample.iac_raw;
+        adc_queue_head = next_head;
+        adc_data_ready = 1U;
+    }
+    else
+    {
+        adc_queue_overflow_count++;
+    }
 
     adc_sample_count++;
-    adc_data_ready = 1;
 
     AdcRegs.ADCINTFLGCLR.bit.ADCINT1 = 1;
 

@@ -105,9 +105,11 @@ def parse_response(frame: bytes) -> ModbusResponse:
     return resp
 
 
-def parse_read_response(response: ModbusResponse, expected_quantity: int) -> tuple[int, ...] | None:
+def parse_read_response(response: ModbusResponse, expected_quantity: int | None = None) -> tuple[int, ...] | None:
     """从 FC03/FC04 响应中解析寄存器值列表。
 
+    :param response: 解析后的响应结构体。
+    :param expected_quantity: 期望的寄存器数量，若为 None 则按响应 byte_count 自动解析。
     :return: 寄存器值元组，无法解析时返回 ``None``。
     """
     if response.valid_crc is False or response.error or response.exception_code is not None:
@@ -118,8 +120,11 @@ def parse_read_response(response: ModbusResponse, expected_quantity: int) -> tup
         return None
     byte_count = response.data[0]
     payload = response.data[1:]
-    if len(payload) != byte_count or byte_count != expected_quantity * 2:
-        response.error = "响应字节数与请求数量不匹配"
+    if len(payload) != byte_count:
+        response.error = f"响应数据长度 ({len(payload)}) 与头部字节数 ({byte_count}) 不匹配"
+        return None
+    if expected_quantity is not None and byte_count != expected_quantity * 2:
+        response.error = f"响应字节数 ({byte_count}) 与期望数量 ({expected_quantity * 2}) 不匹配"
         return None
     values = []
     for i in range(0, byte_count, 2):
@@ -141,3 +146,23 @@ def parse_write_single_response(response: ModbusResponse) -> int | None:
         return None
     value = (response.data[2] << 8) | response.data[3]
     return value
+
+
+def parse_write_single_response_full(response: ModbusResponse) -> tuple[int, int] | None:
+    """从 FC06 响应中解析写回地址与值，返回 (address, value) 元组。"""
+    if response.valid_crc is False or response.error or response.exception_code is not None:
+        return None
+    if response.function != FC_WRITE_SINGLE or len(response.data) != 4:
+        return None
+    address = (response.data[0] << 8) | response.data[1]
+    value = (response.data[2] << 8) | response.data[3]
+    return address, value
+
+
+def parse_write_single_response_exact(response: ModbusResponse, expected_address: int, expected_value: int) -> bool:
+    """校验 FC06 响应是否与期望的地址与值完全一致。"""
+    full = parse_write_single_response_full(response)
+    if full is None:
+        return False
+    addr, val = full
+    return addr == expected_address and val == expected_value

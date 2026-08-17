@@ -12,7 +12,11 @@
 #define MODBUS_SCIA_BAUD_RATE        115200UL //DSP主站与CPLD从站
 #define MODBUS_SCIB_BAUD_RATE        115200UL //上位机主站与DSP从站
 #define MODBUS_FRAME_MAX             64     //数据最大数量
-#define MODBUS_PROTOCOL_VERSION      0x0100 //版本号
+#define MODBUS_PROTOCOL_VERSION      0x0103 //版本号：增加CPLD通信错误分类诊断
+#define MODBUS_CLEAR_FAULT_KEY       0xA55A //清除锁存故障写入密钥
+#define MODBUS_RESET_CPLD_KEY        0xC33C //复位CPLD内部状态机写入密钥
+#define MODBUS_RESET_DSP_KEY         0xD55D //通过看门狗复位DSP写入密钥
+#define MODBUS_ADC_ZERO_CAL_KEY      0xCA1B //重新开始1024点电流零漂校准
 
 /*
  * 状态结构体定义

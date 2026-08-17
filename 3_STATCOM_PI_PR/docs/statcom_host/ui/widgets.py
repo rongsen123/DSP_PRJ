@@ -16,11 +16,11 @@ class LedIndicator(QWidget):
         self._text = text
         self._label = QLabel(text, self)
         self._label.setStyleSheet(
-            "color:#8fa1b3;font-size:12px;background:transparent;"
+            "color:#8fa1b3;font-size:13px;font-weight:500;background:transparent;"
         )
         self._label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-        self.setFixedHeight(22)
-        self._label.setFixedHeight(22)
+        self.setFixedHeight(26)
+        self._label.setFixedHeight(26)
 
     def set_on(self, on: bool, color: str | None = None) -> None:
         if color:
@@ -45,32 +45,49 @@ class LedIndicator(QWidget):
         p.end()
 
     def resizeEvent(self, event) -> None:  # noqa: N802
-        self._label.setGeometry(22, 0, self.width() - 22, self.height())
+        self._label.setGeometry(24, 0, self.width() - 24, self.height())
         super().resizeEvent(event)
 
 
 class StatCard(QWidget):
-    """数值卡片：标题 + 数值 + 单位。"""
+    """数值卡片：标题 + 数值 + 单位 + 附加/次要说明。"""
 
-    def __init__(self, title: str, unit: str = "", parent: QWidget | None = None):
+    def __init__(self, title: str, unit: str = "", secondary: str = "", parent: QWidget | None = None):
         super().__init__(parent)
+        self.setMinimumHeight(105)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(4)
 
         self._title = QLabel(title, self)
         self._title.setObjectName("Caption")
+        self._title.setStyleSheet("color:#94a3b8;font-size:12px;font-weight:600;")
         layout.addWidget(self._title)
 
         self._value = QLabel("--", self)
         self._value.setObjectName("ValueLabel")
-        self._value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._value.setStyleSheet(
+            "color:#f8fafc;font-size:24px;font-weight:700;"
+            "font-family:'Consolas','Segoe UI',monospace;"
+            "background-color:#0b1017;border:1px solid #223040;"
+            "border-radius:6px;padding:4px 10px;min-height:36px;"
+        )
         layout.addWidget(self._value)
 
         self._unit = QLabel(unit, self)
         self._unit.setObjectName("UnitLabel")
         self._unit.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._unit.setStyleSheet("color:#64748b;font-size:11px;font-weight:500;")
         layout.addWidget(self._unit)
+
+        self._secondary = QLabel(secondary, self)
+        self._secondary.setStyleSheet(
+            "color:#8fa1b3;font-size:11px;font-family:'Consolas','Microsoft YaHei UI',monospace;background:transparent;"
+        )
+        self._secondary.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._secondary.setWordWrap(True)
+        layout.addWidget(self._secondary)
 
     def set_value(self, text: str) -> None:
         self._value.setText(text)
@@ -78,11 +95,15 @@ class StatCard(QWidget):
     def set_unit(self, text: str) -> None:
         self._unit.setText(text)
 
+    def set_secondary(self, text: str) -> None:
+        self._secondary.setText(text)
+
     def set_color(self, color: str) -> None:
         self._value.setStyleSheet(
-            f"color:{color};font-size:22px;font-weight:600;"
-            "background-color:#1d2733;border:1px solid #2a3644;"
-            "border-radius:6px;padding:6px 10px;"
+            f"color:{color};font-size:24px;font-weight:700;"
+            "font-family:'Consolas','Segoe UI',monospace;"
+            "background-color:#0b1017;border:1px solid #223040;"
+            "border-radius:6px;padding:4px 10px;min-height:36px;"
         )
 
 

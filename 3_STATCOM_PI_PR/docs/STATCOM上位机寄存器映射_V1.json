@@ -14,7 +14,7 @@
     "register_byte_order": "big_endian",
     "uint32_word_order": "high_word_first",
     "protocol_version_register": "0x0000",
-    "expected_protocol_version": "0x0100"
+    "expected_protocol_version": "0x0102"
   },
   "polling": {
     "input_function": 4,
@@ -50,7 +50,11 @@
     {"address":"0x0016","name":"cpld_command_echo","type":"enum16","enum":"commands"}
   ],
   "holding_registers": [
-    {"address":"0x0100","name":"requested_command","type":"enum16","enum":"commands","read_function":3,"write_functions":[6,16],"fc16_quantity":1,"allowed_values":[0,1]}
+    {"address":"0x0100","name":"requested_command","type":"enum16","enum":"commands","read_function":3,"write_functions":[6,16],"fc16_quantity":1,"allowed_values":[0,1]},
+    {"address":"0x0101","name":"clear_cpld_latched_fault","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xA55A","requires":"requested_command == STOP","readback":"0=idle,1=pending"},
+    {"address":"0x0102","name":"reset_cpld","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xC33C","requires":"requested_command == STOP"},
+    {"address":"0x0103","name":"reset_dsp","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xD55D","requires":"requested_command == STOP"},
+    {"address":"0x0104","name":"adc_zero_recalibrate","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xCA1B","requires":"requested_command == STOP and adc_zero_state != RUNNING","readback":"adc_zero_state"}
   ],
   "bitfields": {
     "cpld_status_bits": {

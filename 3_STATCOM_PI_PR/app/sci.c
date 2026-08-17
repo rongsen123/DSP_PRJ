@@ -21,6 +21,8 @@
 #define MASTER_REQUEST_NONE        0
 #define MASTER_REQUEST_READ        1
 #define MASTER_REQUEST_COMMAND     2
+#define MASTER_REQUEST_CLEAR_FAULT 3
+#define MASTER_REQUEST_RESET_CPLD  4
 /*
  * 串口接收数据帧结构体
  */
@@ -50,6 +52,7 @@ static Uint16 master_command_value = 0;
 static Uint32 master_sent_ms = 0;
 static Uint32 master_next_poll_ms = 0;
 static Uint32 cpld_last_valid_ms = 0;
+static volatile Uint16 dsp_reset_pending = 0;
 /*
  * 中断服务函数声明
  */
@@ -60,7 +63,8 @@ interrupt void ModbusSciBRxIsr(void);
 static void sci_gpio_init(void);
 static void sci_modules_init(void);
 static void sci_timer_init(void);
-static void sci_push_rx(SCI_RX_PORT *port, Uint16 word,volatile MODBUS_LINK_STATS *stats);
+static Uint16 sci_push_rx(SCI_RX_PORT *port, Uint16 word,volatile MODBUS_LINK_STATS *stats);
+static void sci_discard_rx_port(SCI_RX_PORT *port);
 static Uint16 sci_take_frame(SCI_RX_PORT *port, Uint8 *frame);
 static void sci_write_a(const Uint8 *data, Uint16 length);
 static void sci_write_b(const Uint8 *data, Uint16 length);
@@ -70,12 +74,15 @@ static void put_be16(Uint8 *data, Uint16 value);
 static void append_crc(Uint8 *frame, Uint16 payload_length);
 static void master_send_read(void);
 static void master_send_command(Uint16 command);
+static void master_send_clear_fault(void);
+static void master_send_reset_cpld(void);
 static void master_resend(void);
 static void master_handle_frame(const Uint8 *frame, Uint16 length);
 static void master_service(void);
 static Uint16 dsp_input_register(Uint16 address, Uint16 *value);
 static Uint16 dsp_holding_register(Uint16 address, Uint16 *value);
 static Uint16 dsp_write_holding(Uint16 address, Uint16 value);
+static void dsp_software_reset(void);
 static void slave_exception(Uint8 function, Uint8 exception);
 static void slave_handle_frame(const Uint8 *frame, Uint16 length);
 
@@ -299,7 +306,7 @@ interrupt void CommunicationTimer0Isr(void)
  * 输出:将串口接收字节缓存到ring数组中
  *      越界overflows++
  */
-static void sci_push_rx(SCI_RX_PORT *port, Uint16 word, volatile MODBUS_LINK_STATS *stats)
+static Uint16 sci_push_rx(SCI_RX_PORT *port, Uint16 word, volatile MODBUS_LINK_STATS *stats)
 {
     Uint16 next = (port->head + 1) & SCI_RX_RING_MASK;
     port->last_timer = CpuTimer1Regs.TIM.all;
@@ -307,11 +314,23 @@ static void sci_push_rx(SCI_RX_PORT *port, Uint16 word, volatile MODBUS_LINK_STA
     {
         port->ring[port->head] = (Uint8)(word & 0x00FF);
         port->head = next;
+        return 1U;
     }
     else
     {
         stats->overflows++;
+        return 0U;
     }
+}
+
+/*
+ * 丢弃当前正在接收的残帧。
+ * SCI出现硬件错误后，错误前后的字节不能再拼成一个Modbus RTU帧。
+ */
+static void sci_discard_rx_port(SCI_RX_PORT *port)
+{
+    port->tail = port->head;
+    port->last_timer = CpuTimer1Regs.TIM.all;
 }
 /*
  * 串口A接收中断服务函数
@@ -320,20 +339,44 @@ static void sci_push_rx(SCI_RX_PORT *port, Uint16 word, volatile MODBUS_LINK_STA
 
 interrupt void ModbusSciARxIsr(void)
 {
+    Uint16 rx_status;
     Uint16 word;
+    Uint16 rx_error = SciaRegs.SCIFFRX.bit.RXFFOVF;
+
+    if(rx_error != 0U)
+    {
+        modbus_cpld_stats.overflows++;
+    }
+
     while(SciaRegs.SCIFFRX.bit.RXFFST != 0) //FIFO已经有字节
     {
+        rx_status = SciaRegs.SCIRXST.all;
         word = SciaRegs.SCIRXBUF.all;
-        if((word & 0xC000) == 0)            //判断是否有错误bit
+
+        /* SCIRXST: PE/OE/FE/BRKDT/RXERROR；RXBUF[15:14]: PE/FE。 */
+        if(((rx_status & 0x00BCU) != 0U) || ((word & 0xC000U) != 0U))
         {
-            sci_push_rx(&sci_a_rx, word, &modbus_cpld_stats);   //进入环形缓存区
-        }
-        else
-        {
+            rx_error = 1U;
             modbus_cpld_stats.format_errors++;
         }
+        else if(rx_error == 0U)
+        {
+            if(sci_push_rx(&sci_a_rx, word, &modbus_cpld_stats) == 0U) //进入环形缓存区
+            {
+                rx_error = 1U;
+            }
+        }
     }
-    //清空
+
+    if(rx_error != 0U)
+    {
+        sci_discard_rx_port(&sci_a_rx);
+        SciaRegs.SCICTL1.bit.SWRESET = 0;
+        SciaRegs.SCIFFRX.bit.RXFIFORESET = 0;
+        SciaRegs.SCIFFRX.bit.RXFIFORESET = 1;
+        SciaRegs.SCICTL1.bit.SWRESET = 1;
+    }
+
     SciaRegs.SCIFFRX.bit.RXFFOVRCLR = 1;
     SciaRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
@@ -346,19 +389,44 @@ interrupt void ModbusSciARxIsr(void)
 
 interrupt void ModbusSciBRxIsr(void)
 {
+    Uint16 rx_status;
     Uint16 word;
+    Uint16 rx_error = ScibRegs.SCIFFRX.bit.RXFFOVF;
+
+    if(rx_error != 0U)
+    {
+        modbus_pc_stats.overflows++;
+    }
+
     while(ScibRegs.SCIFFRX.bit.RXFFST != 0)
     {
+        rx_status = ScibRegs.SCIRXST.all;
         word = ScibRegs.SCIRXBUF.all;
-        if((word & 0xC000) == 0)
+
+        /* SCIRXST: PE/OE/FE/BRKDT/RXERROR；RXBUF[15:14]: PE/FE。 */
+        if(((rx_status & 0x00BCU) != 0U) || ((word & 0xC000U) != 0U))
         {
-            sci_push_rx(&sci_b_rx, word, &modbus_pc_stats);
-        }
-        else
-        {
+            rx_error = 1U;
             modbus_pc_stats.format_errors++;
         }
+        else if(rx_error == 0U)
+        {
+            if(sci_push_rx(&sci_b_rx, word, &modbus_pc_stats) == 0U)
+            {
+                rx_error = 1U;
+            }
+        }
     }
+
+    if(rx_error != 0U)
+    {
+        sci_discard_rx_port(&sci_b_rx);
+        ScibRegs.SCICTL1.bit.SWRESET = 0;
+        ScibRegs.SCIFFRX.bit.RXFIFORESET = 0;
+        ScibRegs.SCIFFRX.bit.RXFIFORESET = 1;
+        ScibRegs.SCICTL1.bit.SWRESET = 1;
+    }
+
     ScibRegs.SCIFFRX.bit.RXFFOVRCLR = 1;
     ScibRegs.SCIFFRX.bit.RXFFINTCLR = 1;
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
@@ -468,7 +536,7 @@ static void master_send_read(void)
     frame[0] = MODBUS_CPLD_ADDRESS;//地址
     frame[1] = 0x04;    //功能码:读取
     put_be16(&frame[2], 0x0000);    //起始寄存器地址
-    put_be16(&frame[4], 0x000B);    //数量
+    put_be16(&frame[4], 0x000E);    //读取0000-000D，共14个寄存器
     append_crc(frame, 6);   //CRC计算 幅值
     sci_write_a(frame, 8);  //SCI发送
     master_waiting = 1; //主站等待状态
@@ -493,6 +561,38 @@ static void master_send_command(Uint16 command)
     master_sent_ms = system_millis;
 }
 /*
+ * 向CPLD写入一次性故障清除密钥。CPLD只在STOP回显状态接受该命令，
+ * 并且只清除已经消失的锁存故障源。
+ */
+static void master_send_clear_fault(void)
+{
+    Uint8 frame[8];
+    frame[0] = MODBUS_CPLD_ADDRESS;
+    frame[1] = 0x06;
+    put_be16(&frame[2], 0x0101);
+    put_be16(&frame[4], MODBUS_CLEAR_FAULT_KEY);
+    append_crc(frame, 6);
+    sci_write_a(frame, 8);
+    master_waiting = 1;
+    master_request = MASTER_REQUEST_CLEAR_FAULT;
+    master_sent_ms = system_millis;
+}
+
+/* Ask the CPLD to reset its internal communication, ADC and fault state. */
+static void master_send_reset_cpld(void)
+{
+    Uint8 frame[8];
+    frame[0] = MODBUS_CPLD_ADDRESS;
+    frame[1] = 0x06;
+    put_be16(&frame[2], 0x0102);
+    put_be16(&frame[4], MODBUS_RESET_CPLD_KEY);
+    append_crc(frame, 6);
+    sci_write_a(frame, 8);
+    master_waiting = 1;
+    master_request = MASTER_REQUEST_RESET_CPLD;
+    master_sent_ms = system_millis;
+}
+/*
  * 根据状态机决定主站写还是读
  */
 static void master_resend(void)
@@ -500,6 +600,14 @@ static void master_resend(void)
     if(master_request == MASTER_REQUEST_COMMAND)
     {
         master_send_command(master_command_value);
+    }
+    else if(master_request == MASTER_REQUEST_CLEAR_FAULT)
+    {
+        master_send_clear_fault();
+    }
+    else if(master_request == MASTER_REQUEST_RESET_CPLD)
+    {
+        master_send_reset_cpld();
     }
     else
     {
@@ -511,7 +619,7 @@ static void master_resend(void)
  */
 static void master_handle_frame(const Uint8 *frame, Uint16 length)
 {
-    Uint16 reg[11];
+    Uint16 reg[14];
     Uint16 index;
     //首个帧字节不是地址或者CRC错误
     if((frame[0] != MODBUS_CPLD_ADDRESS) ||  (modbus_frame_valid(frame, length) == 0))
@@ -524,14 +632,22 @@ static void master_handle_frame(const Uint8 *frame, Uint16 length)
     if((frame[1] & 0x80) != 0)
     {
         modbus_cpld_stats.exceptions++;
+        if(master_request == MASTER_REQUEST_CLEAR_FAULT)
+        {
+            cpld_link_command.clear_fault_request = 0;
+        }
+        if(master_request == MASTER_REQUEST_RESET_CPLD)
+        {
+            cpld_link_command.reset_request = 0;
+        }
         master_waiting = 0;
         master_next_poll_ms = system_millis + CPLD_POLL_PERIOD_MS;
         return;
     }
     //发的请求指令是04 解析数据
-    if((master_request == MASTER_REQUEST_READ) &&  (frame[1] == 0x04) && (length == 27) && (frame[2] == 22))
+    if((master_request == MASTER_REQUEST_READ) &&  (frame[1] == 0x04) && (length == 33) && (frame[2] == 28))
     {
-        for(index = 0; index < 11; index++)
+        for(index = 0; index < 14; index++)
         {
             reg[index] = get_be16(&frame[3 + (index * 2)]);
         }
@@ -544,6 +660,9 @@ static void master_handle_frame(const Uint8 *frame, Uint16 length)
         cpld_link_status.command_echo = reg[8];
         cpld_link_status.remote_valid_frames = reg[9];
         cpld_link_status.remote_error_frames = reg[10];
+        cpld_link_status.remote_uart_errors = reg[11];
+        cpld_link_status.remote_crc_errors = reg[12];
+        cpld_link_status.remote_incomplete_frames = reg[13];
         cpld_link_status.valid = 1;
         cpld_link_status.link_flags = 0x0001;
         cpld_link_status.age_ticks = 0;
@@ -559,6 +678,30 @@ static void master_handle_frame(const Uint8 *frame, Uint16 length)
             (get_be16(&frame[4]) == master_command_value))
     {
         cpld_link_status.command_echo = master_command_value;
+        cpld_last_valid_ms = system_millis;
+        master_waiting = 0;
+        master_retries = 0;
+        master_next_poll_ms = system_millis + CPLD_POLL_PERIOD_MS;
+    }
+    else if((master_request == MASTER_REQUEST_CLEAR_FAULT) &&
+            (frame[1] == 0x06) && (length == 8) &&
+            (get_be16(&frame[2]) == 0x0101) &&
+            (get_be16(&frame[4]) == MODBUS_CLEAR_FAULT_KEY))
+    {
+        cpld_link_command.clear_fault_request = 0;
+        cpld_last_valid_ms = system_millis;
+        master_waiting = 0;
+        master_retries = 0;
+        master_next_poll_ms = system_millis + CPLD_POLL_PERIOD_MS;
+    }
+    else if((master_request == MASTER_REQUEST_RESET_CPLD) &&
+            (frame[1] == 0x06) && (length == 8) &&
+            (get_be16(&frame[2]) == 0x0102) &&
+            (get_be16(&frame[4]) == MODBUS_RESET_CPLD_KEY))
+    {
+        cpld_link_command.reset_request = 0;
+        cpld_link_status.valid = 0;
+        cpld_link_status.link_flags = 0x0002;
         cpld_last_valid_ms = system_millis;
         master_waiting = 0;
         master_retries = 0;
@@ -590,6 +733,14 @@ static void master_service(void)
             }
             else
             {
+                if(master_request == MASTER_REQUEST_CLEAR_FAULT)
+                {
+                    cpld_link_command.clear_fault_request = 0;
+                }
+                if(master_request == MASTER_REQUEST_RESET_CPLD)
+                {
+                    cpld_link_command.reset_request = 0;
+                }
                 master_waiting = 0;
                 master_retries = 0;
                 master_next_poll_ms = system_millis + CPLD_POLL_PERIOD_MS;
@@ -604,6 +755,14 @@ static void master_service(void)
         if(requested != cpld_link_status.command_echo)
         {
             master_send_command(requested);
+        }
+        else if(cpld_link_command.clear_fault_request != 0)
+        {
+            master_send_clear_fault();
+        }
+        else if(cpld_link_command.reset_request != 0)
+        {
+            master_send_reset_cpld();
         }
         else
         {
@@ -656,14 +815,22 @@ static Uint16 dsp_input_register(Uint16 address, Uint16 *value)
         *value = (Uint16)(modbus_cpld_stats.crc_errors +
                           modbus_cpld_stats.format_errors +
                           modbus_cpld_stats.timeouts +
-                          modbus_cpld_stats.exceptions);
+                          modbus_cpld_stats.exceptions +
+                          modbus_cpld_stats.overflows);
         break;
     case 0x0015:
         *value = (Uint16)(modbus_pc_stats.crc_errors +
                           modbus_pc_stats.format_errors +
-                          modbus_pc_stats.exceptions);
+                          modbus_pc_stats.exceptions +
+                          modbus_pc_stats.overflows);
         break;
     case 0x0016: *value = cpld_link_status.command_echo; break;
+    case 0x0017: *value = cpld_link_status.remote_uart_errors; break;
+    case 0x0018: *value = cpld_link_status.remote_crc_errors; break;
+    case 0x0019: *value = cpld_link_status.remote_incomplete_frames; break;
+    case 0x001A: *value = (Uint16)modbus_cpld_stats.format_errors; break;
+    case 0x001B: *value = (Uint16)modbus_cpld_stats.overflows; break;
+    case 0x001C: *value = (Uint16)modbus_cpld_stats.timeouts; break;
     default: return 0;
     }
     return 1;
@@ -673,12 +840,32 @@ static Uint16 dsp_input_register(Uint16 address, Uint16 *value)
  */
 static Uint16 dsp_holding_register(Uint16 address, Uint16 *value)
 {
-    if(address != 0x0100)
+    if(address == 0x0100)
     {
-        return 0;
+        *value = (cpld_link_command.run_enable != 0) ? 1 : 0;
+        return 1;
     }
-    *value = (cpld_link_command.run_enable != 0) ? 1 : 0;
-    return 1;
+    if(address == 0x0101)
+    {
+        *value = (cpld_link_command.clear_fault_request != 0) ? 1 : 0;
+        return 1;
+    }
+    if(address == 0x0102)
+    {
+        *value = (cpld_link_command.reset_request != 0) ? 1 : 0;
+        return 1;
+    }
+    if(address == 0x0103)
+    {
+        *value = (dsp_reset_pending != 0) ? 1 : 0;
+        return 1;
+    }
+    if(address == 0x0104)
+    {
+        *value = adc_zero_calibration.state;
+        return 1;
+    }
+    return 0;
 }
 /*
  * 写保持器 检查数据
@@ -688,16 +875,82 @@ static Uint16 dsp_holding_register(Uint16 address, Uint16 *value)
  */
 static Uint16 dsp_write_holding(Uint16 address, Uint16 value)
 {
-    if(address != 0x0100)
+    if(address == 0x0100)
     {
-        return 0;
+        if(value > 1)
+        {
+            return 2;
+        }
+        if((value != 0) &&
+           ((cpld_link_command.clear_fault_request != 0) ||
+            (cpld_link_command.reset_request != 0) ||
+            (adc_zero_calibration.state == ADC_CALIBRATION_RUNNING)))
+        {
+            return 2;
+        }
+        cpld_link_command.run_enable = value;
+        return 1;
     }
-    if(value > 1)
+    if(address == 0x0101)
     {
-        return 2;
+        if((value != MODBUS_CLEAR_FAULT_KEY) ||
+           (cpld_link_command.run_enable != 0) ||
+           (cpld_link_command.reset_request != 0))
+        {
+            return 2;
+        }
+        cpld_link_command.clear_fault_request = 1;
+        return 1;
     }
-    cpld_link_command.run_enable = value;
-    return 1;
+    if(address == 0x0102)
+    {
+        if((value != MODBUS_RESET_CPLD_KEY) ||
+           (cpld_link_command.run_enable != 0) ||
+           (cpld_link_command.clear_fault_request != 0) ||
+           (cpld_link_command.reset_request != 0))
+        {
+            return 2;
+        }
+        cpld_link_command.reset_request = 1;
+        return 1;
+    }
+    if(address == 0x0103)
+    {
+        if((value != MODBUS_RESET_DSP_KEY) ||
+           (cpld_link_command.run_enable != 0) ||
+           (dsp_reset_pending != 0))
+        {
+            return 2;
+        }
+        dsp_reset_pending = 1;
+        return 1;
+    }
+    if(address == 0x0104)
+    {
+        if((value != MODBUS_ADC_ZERO_CAL_KEY) ||
+           (cpld_link_command.run_enable != 0) ||
+           (cpld_link_command.clear_fault_request != 0) ||
+           (cpld_link_command.reset_request != 0) ||
+           (adc_zero_calibration.state == ADC_CALIBRATION_RUNNING))
+        {
+            return 2;
+        }
+        adc_zero_calibration_start();
+        return 1;
+    }
+    return 0;
+}
+
+/* SCI-B has already waited for TXEMPTY before this function is called. */
+static void dsp_software_reset(void)
+{
+    DINT;
+    EALLOW;
+    SysCtrlRegs.WDCR = 0x0028;
+    EDIS;
+    for(;;)
+    {
+    }
 }
 /*
  * 地址或者数值非法需要发挥异常响应码函数
@@ -825,6 +1078,12 @@ static void slave_handle_frame(const Uint8 *frame, Uint16 length) // 处理上�
         address = get_be16(&frame[2]);  // 第2、3字节组成起始保持寄存器地址
         quantity = get_be16(&frame[4]); // 第4、5字节组成写入寄存器数量
 
+        if(address != 0x0100) // 清故障0101是一次性安全动作，只允许FC06写入
+        {
+            slave_exception(0x10, 0x02);
+            return;
+        }
+
         if((quantity != 1) || (frame[6] != 2)) // 当前只允许数量1且数据区字节数为2
         {
             slave_exception(0x10, 0x03); // 数量或字节数不合法，返回异常码03
@@ -894,4 +1153,8 @@ void communication_task(void)
         cpld_link_status.link_flags |= 0x0008;
     }
     master_service();
+    if(dsp_reset_pending != 0)
+    {
+        dsp_software_reset();
+    }
 }

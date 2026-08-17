@@ -243,27 +243,35 @@ def build_stylesheet() -> str:
 
     /* 表格组件 */
     QTableWidget, QTableView {{
-        background-color: {BG_CARD};
-        border: 1px solid {BORDER_COLOR};
+        background-color: #0d141e;
+        alternate-background-color: #141d2b;
+        border: 1px solid #223040;
         border-radius: 6px;
-        gridline-color: #1e2a3a;
-        color: {TEXT_MAIN};
+        gridline-color: #1a2533;
+        color: #f1f5f9;
+        outline: none;
+    }}
+    QTableCornerButton::section {{
+        background-color: #090d13;
+        border: none;
     }}
     QHeaderView::section {{
-        background-color: {BG_BASE};
-        color: {TEXT_MUTED};
+        background-color: #090d13;
+        color: #94a3b8;
         border: none;
-        border-bottom: 1px solid {BORDER_COLOR};
-        border-right: 1px solid #1a2636;
+        border-bottom: 1px solid #223040;
+        border-right: 1px solid #1a2533;
         padding: 6px;
         font-weight: 600;
     }}
     QTableWidget::item {{
         padding: 4px 8px;
-        border-bottom: 1px solid #16202c;
+        border-bottom: 1px solid #16202e;
+        color: #f1f5f9;
     }}
     QTableWidget::item:selected {{
         background-color: #1e3a5f;
+        color: #ffffff;
     }}
 
     /* 滚动条美化 */
