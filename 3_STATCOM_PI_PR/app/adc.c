@@ -3,18 +3,18 @@
 #include "grid_pll.h"
 #include "statcom_config.h"
 
-volatile ADC_SAMPLE adc_sample = {0, 0, 0};
-volatile ADC_ANALOG_VALUE adc_value = {0.0f, 0.0f, 0.0f,
-                                      0.0f, 0.0f, 0.0f};
+volatile ADC_SAMPLE adc_sample = {0, 0};
+volatile ADC_ANALOG_VALUE adc_value = {0.0f, 0.0f, 0.0f, 0.0f};
 volatile ADC_ZERO_CALIBRATION adc_zero_calibration =
 {
-    2048.0f,
     2048.0f,
     0U,
     ADC_CALIBRATION_IDLE
 };
 volatile Uint16 adc_data_ready = 0;
 volatile Uint32 adc_sample_count = 0;
+volatile Uint32 adc_processed_count = 0;
+volatile Uint32 adc_pll_sample_count = 0;
 volatile Uint32 adc_overflow_count = 0;
 volatile Uint32 adc_queue_overflow_count = 0;
 volatile Uint32 adc_isr_last_cycles = 0UL;
@@ -24,7 +24,6 @@ volatile float grid_halfwave_centered_pu = 0.0F;
 volatile Uint16 grid_halfwave_signal_valid = 0U;
 volatile Uint16 grid_halfwave_clipped = 0U;
 
-static Uint32 idc_zero_sum = 0UL;
 static Uint32 iac_zero_sum = 0UL;
 static Uint16 grid_dc_window[GRID_DC_WINDOW_SAMPLES];
 static Uint32 grid_dc_sum = 0UL;
@@ -35,6 +34,7 @@ static Uint16 grid_clip_count = 0U;
 static volatile ADC_SAMPLE adc_process_queue[ADC_PROCESS_QUEUE_SIZE];
 static volatile Uint16 adc_queue_head = 0U;
 static volatile Uint16 adc_queue_tail = 0U;
+static Uint16 adc_queue_decimation_count = 0U;
 
 static void adc_soc_init(void);
 static void epwm1_adc_trigger_init(void);
@@ -83,27 +83,22 @@ static void adc_soc_init(void)
     /* Generate ADCINT1 only after the conversion result is latched. */
     AdcRegs.ADCCTL1.bit.INTPULSEPOS = 1;
 
-    /* Sequential sampling; give SOC0-SOC2 fixed high priority. */
+    /* Sequential sampling; give the two active SOCs fixed high priority. */
     AdcRegs.ADCSAMPLEMODE.all = 0x0000;
-    AdcRegs.SOCPRICTL.bit.SOCPRIORITY = 3;
+    AdcRegs.SOCPRICTL.bit.SOCPRIORITY = 2;
 
     /* SOC0: EPWM1 SOCA -> ADCINA0/VDC1 grid half-wave -> ADCRESULT0. */
     AdcRegs.ADCSOC0CTL.bit.CHSEL = 0;
     AdcRegs.ADCSOC0CTL.bit.TRIGSEL = 5;
     AdcRegs.ADCSOC0CTL.bit.ACQPS = 14;
 
-    /* SOC1: EPWM1 SOCA -> ADCINA1/IDC1 -> ADCRESULT1. */
-    AdcRegs.ADCSOC1CTL.bit.CHSEL = 1;
+    /* SOC1: EPWM1 SOCA -> ADCINA2/IAC1 -> ADCRESULT1. */
+    AdcRegs.ADCSOC1CTL.bit.CHSEL = 2;
     AdcRegs.ADCSOC1CTL.bit.TRIGSEL = 5;
     AdcRegs.ADCSOC1CTL.bit.ACQPS = 14;
 
-    /* SOC2: EPWM1 SOCA -> ADCINA2/IAC1 -> ADCRESULT2. */
-    AdcRegs.ADCSOC2CTL.bit.CHSEL = 2;
-    AdcRegs.ADCSOC2CTL.bit.TRIGSEL = 5;
-    AdcRegs.ADCSOC2CTL.bit.ACQPS = 14;
-
-    /* EOC2 is last, so it indicates that all three results are valid. */
-    AdcRegs.INTSEL1N2.bit.INT1SEL = 2;
+    /* EOC1 is last, so it indicates that both conversion results are valid. */
+    AdcRegs.INTSEL1N2.bit.INT1SEL = 1;
     AdcRegs.INTSEL1N2.bit.INT1CONT = 0;
     AdcRegs.INTSEL1N2.bit.INT1E = 1;
 
@@ -165,32 +160,38 @@ void adc_process(void)
 {
     ADC_SAMPLE sample;
     Uint16 tail;
+    Uint16 processed = 0U;
 
-    if(adc_queue_head == adc_queue_tail)
+    while(processed < ADC_PROCESS_BATCH_LIMIT)
     {
-        adc_data_ready = 0U;
-        return;
+        if(adc_queue_head == adc_queue_tail)
+        {
+            adc_data_ready = 0U;
+            break;
+        }
+
+        /* 只在移动队列尾指针时短暂关中断，浮点处理仍可被SCI抢占。 */
+        DINT;
+        tail = adc_queue_tail;
+        sample.vdc_raw = adc_process_queue[tail].vdc_raw;
+        sample.iac_raw = adc_process_queue[tail].iac_raw;
+        adc_queue_tail = (tail + 1U) & ADC_PROCESS_QUEUE_MASK;
+        adc_data_ready = (adc_queue_tail != adc_queue_head) ? 1U : 0U;
+        EINT;
+
+        adc_update_zero_calibration(&sample);
+        adc_convert_to_analog(&sample);
+        adc_processed_count++;
+
+        /* ISR已经完成20 kHz到4 kHz的确定性抽取，队列中的每点都运行PLL。 */
+        grid_pll_process_sample(sample.vdc_raw);
+        adc_pll_sample_count++;
+        processed++;
     }
-
-    /* 每次主循环处理一个完整样本；SCI中断可在后续浮点计算期间抢占。 */
-    DINT;
-    tail = adc_queue_tail;
-    sample.vdc_raw = adc_process_queue[tail].vdc_raw;
-    sample.idc_raw = adc_process_queue[tail].idc_raw;
-    sample.iac_raw = adc_process_queue[tail].iac_raw;
-    adc_queue_tail = (tail + 1U) & ADC_PROCESS_QUEUE_MASK;
-    adc_data_ready = (adc_queue_tail != adc_queue_head) ? 1U : 0U;
-    EINT;
-
-    /* 浮点和PLL全部在可被SCI抢占的前台执行，并保持逐样本顺序。 */
-    adc_update_zero_calibration(&sample);
-    adc_convert_to_analog(&sample);
-    grid_pll_process_sample(sample.vdc_raw);
 }
 
 void adc_zero_calibration_start(void)
 {
-    idc_zero_sum = 0UL;
     iac_zero_sum = 0UL;
     adc_zero_calibration.sample_count = 0U;
     adc_zero_calibration.state = ADC_CALIBRATION_RUNNING;
@@ -203,14 +204,11 @@ static void adc_update_zero_calibration(const ADC_SAMPLE *sample)
         return;
     }
 
-    idc_zero_sum += (Uint32)sample->idc_raw;
     iac_zero_sum += (Uint32)sample->iac_raw;
     adc_zero_calibration.sample_count++;
 
     if(adc_zero_calibration.sample_count >= ADC_ZERO_CALIBRATION_SAMPLES)
     {
-        adc_zero_calibration.idc_offset_count =
-            (float)idc_zero_sum / (float)ADC_ZERO_CALIBRATION_SAMPLES;
         adc_zero_calibration.iac_offset_count =
             (float)iac_zero_sum / (float)ADC_ZERO_CALIBRATION_SAMPLES;
         adc_zero_calibration.state = ADC_CALIBRATION_DONE;
@@ -221,7 +219,6 @@ static void adc_convert_to_analog(const ADC_SAMPLE *sample)
 {
     /* ADC pin voltages, useful for checking the analog front end in CCS. */
     adc_value.vdc_pin_v = (float)sample->vdc_raw * ADC_VOLTS_PER_COUNT;
-    adc_value.idc_pin_v = (float)sample->idc_raw * ADC_VOLTS_PER_COUNT;
     adc_value.iac_pin_v = (float)sample->iac_raw * ADC_VOLTS_PER_COUNT;
 
     /*
@@ -234,9 +231,6 @@ static void adc_convert_to_analog(const ADC_SAMPLE *sample)
         (float)sample->vdc_raw * ADC_VDC_VOLTS_PER_COUNT;
 
     /* Bipolar current channels are centered near 1.5 V (about count 2048). */
-    adc_value.idc_a =
-        ((float)sample->idc_raw - adc_zero_calibration.idc_offset_count) *
-        ADC_CURRENT_AMPS_PER_COUNT;
     adc_value.iac_a =
         ((float)sample->iac_raw - adc_zero_calibration.iac_offset_count) *
         ADC_CURRENT_AMPS_PER_COUNT;
@@ -309,26 +303,29 @@ interrupt void AdcInt1Isr(void)
     Uint16 next_head;
     ADC_SAMPLE sample;
 
-    /* EOC2 has occurred, so ADCRESULT0-2 all belong to this sample set. */
+    /* EOC1 has occurred, so ADCRESULT0-1 belong to this two-channel set. */
     sample.vdc_raw = AdcResult.ADCRESULT0;
-    sample.idc_raw = AdcResult.ADCRESULT1;
-    sample.iac_raw = AdcResult.ADCRESULT2;
+    sample.iac_raw = AdcResult.ADCRESULT1;
     adc_sample.vdc_raw = sample.vdc_raw;
-    adc_sample.idc_raw = sample.idc_raw;
     adc_sample.iac_raw = sample.iac_raw;
 
-    next_head = (adc_queue_head + 1U) & ADC_PROCESS_QUEUE_MASK;
-    if(next_head != adc_queue_tail)
+    /* 严格选取第5、10、15...次ADC结果，形成均匀的4 kHz处理时基。 */
+    adc_queue_decimation_count++;
+    if(adc_queue_decimation_count >= ADC_QUEUE_DECIMATION)
     {
-        adc_process_queue[adc_queue_head].vdc_raw = sample.vdc_raw;
-        adc_process_queue[adc_queue_head].idc_raw = sample.idc_raw;
-        adc_process_queue[adc_queue_head].iac_raw = sample.iac_raw;
-        adc_queue_head = next_head;
-        adc_data_ready = 1U;
-    }
-    else
-    {
-        adc_queue_overflow_count++;
+        adc_queue_decimation_count = 0U;
+        next_head = (adc_queue_head + 1U) & ADC_PROCESS_QUEUE_MASK;
+        if(next_head != adc_queue_tail)
+        {
+            adc_process_queue[adc_queue_head].vdc_raw = sample.vdc_raw;
+            adc_process_queue[adc_queue_head].iac_raw = sample.iac_raw;
+            adc_queue_head = next_head;
+            adc_data_ready = 1U;
+        }
+        else
+        {
+            adc_queue_overflow_count++;
+        }
     }
 
     adc_sample_count++;

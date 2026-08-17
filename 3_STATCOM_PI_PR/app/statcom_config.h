@@ -26,15 +26,19 @@
 #define STATCOM_POWER_OUTPUT_ENABLED     (0U)
 #define STATCOM_ACTIVE_STAGE             (1U)
 
-/* ADCINA0 positive-half-wave reconstruction and SOGI-PLL at 20 kHz. */
+/*
+ * ADCINA0仍由EPWM以20 kHz采样；ISR每5点确定性抽取一次，SOGI-PLL以4 kHz运行。
+ * 窗口和状态计数均按4 kHz换算，保持20 ms均值窗口、37.5 ms丢失判断、
+ * 100 ms锁定确认和20 ms解锁确认。
+ */
 #define GRID_ADC_REFERENCE_VOLTS             (3.0F)
 #define GRID_ADC_FULL_SCALE_COUNTS           (4096.0F)
 #define GRID_INPUT_FULL_SCALE_VOLTS          (1123.0F)
 #define GRID_NOMINAL_PEAK_VOLTS              (311.12698F)
-#define GRID_SAMPLE_FREQUENCY_HZ             (20000.0F)
-#define GRID_SAMPLE_PERIOD_SECONDS           (0.00005F)
-#define GRID_DC_WINDOW_SAMPLES               (400U)
-#define GRID_SIGNAL_LOSS_SAMPLES             (600U)
+#define GRID_SAMPLE_FREQUENCY_HZ             (4000.0F)
+#define GRID_SAMPLE_PERIOD_SECONDS           (0.00025F)
+#define GRID_DC_WINDOW_SAMPLES               (80U)
+#define GRID_SIGNAL_LOSS_SAMPLES             (150U)
 #define GRID_SIGNAL_PRESENT_COUNTS           (32U)
 #define GRID_ADC_CLIP_HIGH_COUNTS            (4090U)
 #define GRID_ADC_CLIP_CONFIRM_SAMPLES        (4U)
@@ -50,7 +54,7 @@
 #define GRID_PLL_UNLOCK_Q_ERROR_PU           (0.20F)
 #define GRID_PLL_SIGNAL_VALID_AMPLITUDE_PU   (0.05F)
 #define GRID_PLL_NORMALIZATION_FLOOR_PU      (0.08F)
-#define GRID_PLL_LOCK_SAMPLES                (2000U)
-#define GRID_PLL_UNLOCK_SAMPLES              (400U)
+#define GRID_PLL_LOCK_SAMPLES                (400U)
+#define GRID_PLL_UNLOCK_SAMPLES              (80U)
 
 #endif /* APP_STATCOM_CONFIG_H_ */

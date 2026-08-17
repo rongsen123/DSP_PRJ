@@ -4,8 +4,9 @@
 #include "statcom_config.h"
 
 #define GRID_TWO_PI                    (6.283185307179586F)
-#define GRID_Q_ERROR_FILTER_ALPHA      (0.01F)
-#define GRID_FREQUENCY_FILTER_ALPHA    (0.001F)
+/* Preserve the original 20 kHz filter time constants after 5:1 decimation. */
+#define GRID_Q_ERROR_FILTER_ALPHA      (0.04900995F)
+#define GRID_FREQUENCY_FILTER_ALPHA    (0.00499001F)
 
 typedef struct
 {
@@ -156,14 +157,14 @@ void GridPll_Init(void)
     /* Park-domain traps reject the dominant terms produced by half-wave
      * even harmonics without changing the DC phase-error component. */
     GridPll_BiquadInit(&g_pll.qNotch[0],
-                       0.9922075407F, -1.9841702690F, 0.9922075407F,
-                       -1.9841702690F, 0.9844150813F);
-    GridPll_BiquadInit(&g_pll.qNotch[1],
-                       0.9769887635F, -1.9518083676F, 0.9769887635F,
-                       -1.9518083676F, 0.9539775270F);
-    GridPll_BiquadInit(&g_pll.qNotch[2],
                        0.9622513159F, -1.9185700325F, 0.9622513159F,
                        -1.9185700325F, 0.9245026319F);
+    GridPll_BiquadInit(&g_pll.qNotch[1],
+                       0.8954774683F, -1.7414707091F, 0.8954774683F,
+                       -1.7414707091F, 0.7909549366F);
+    GridPll_BiquadInit(&g_pll.qNotch[2],
+                       0.8393897288F, -1.5509899804F, 0.8393897288F,
+                       -1.5509899804F, 0.6787794575F);
 
     g_gridPllInputPu = 0.0F;
     g_gridPllAlphaPu = 0.0F;
