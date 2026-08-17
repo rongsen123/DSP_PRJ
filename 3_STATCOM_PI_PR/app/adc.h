@@ -22,17 +22,22 @@
 #define ADC_CURRENT_AMPS_PER_COUNT   0.09887695f
 
 /*
- * Average 1024 samples (51.2 ms at 20 kHz) once after startup.  The power
- * stage must be disabled and both current sensors must carry zero current.
+ * Average 1024 retained samples (256 ms at the 4 kHz processing rate) once
+ * after startup.  The power stage must be disabled and the AC-current sensor
+ * must carry zero current.
  */
 #define ADC_ZERO_CALIBRATION_SAMPLES 1024U
 
 /*
- * ADC ISR只负责采样入队；主循环逐点执行零漂、模拟量换算和PLL。
- * 256组缓存可覆盖约12.8 ms，可跨越SCI-B长回复与相邻SCI-A请求。
+ * ADC ISR只负责两路采样并按5:1固定抽取入队；前台批量排空队列。
+ * 256组4 kHz缓存可覆盖约64 ms，可跨越SCI-B长回复与相邻SCI-A请求。
  */
 #define ADC_PROCESS_QUEUE_SIZE       256U
 #define ADC_PROCESS_QUEUE_MASK       (ADC_PROCESS_QUEUE_SIZE - 1U)
+#define ADC_PROCESS_BATCH_LIMIT      128U
+
+/* ADC保持20 kHz；ISR每5次固定入队1组，队列和PLL均严格运行在4 kHz。 */
+#define ADC_QUEUE_DECIMATION         5U
 
 #define ADC_CALIBRATION_IDLE         0U
 #define ADC_CALIBRATION_RUNNING      1U
@@ -41,23 +46,19 @@
 typedef struct
 {
     Uint16 vdc_raw;             /* SOC0: ADCINA0/VDC1, grid positive half-wave */
-    Uint16 idc_raw;             /* SOC1: ADCINA1, schematic net IDC1 */
-    Uint16 iac_raw;             /* SOC2: ADCINA2, schematic net IAC1 */
+    Uint16 iac_raw;             /* SOC1: ADCINA2, schematic net IAC1 */
 } ADC_SAMPLE;
 
 typedef struct
 {
     float vdc_pin_v;            /* Voltage present on ADCINA0 */
-    float idc_pin_v;            /* Voltage present on ADCINA1 */
     float iac_pin_v;            /* Voltage present on ADCINA2 */
     float vdc_bus_v;            /* Legacy VDC1 scaling; NOT the DC-link feedback */
-    float idc_a;                /* Real DC current */
     float iac_a;                /* Real AC current */
 } ADC_ANALOG_VALUE;
 
 typedef struct
 {
-    float idc_offset_count;
     float iac_offset_count;
     Uint16 sample_count;
     Uint16 state;
@@ -68,6 +69,8 @@ extern volatile ADC_ANALOG_VALUE adc_value;
 extern volatile ADC_ZERO_CALIBRATION adc_zero_calibration;
 extern volatile Uint16 adc_data_ready;
 extern volatile Uint32 adc_sample_count;
+extern volatile Uint32 adc_processed_count;
+extern volatile Uint32 adc_pll_sample_count;
 extern volatile Uint32 adc_overflow_count;
 extern volatile Uint32 adc_queue_overflow_count;
 extern volatile Uint32 adc_isr_last_cycles;
