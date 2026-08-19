@@ -1,0 +1,14 @@
+flowchart LR
+    VREF["Vdc*\n用户目标"] --> EV(("+/-"))
+    VDC["Vdc\nCPLD光纤反馈"] --> EV
+    EV --> LPF["电压反馈低通"] --> PI["PI电压外环"] --> IP["Ip*\n仅补偿损耗"]
+    IQ["Iq*\n用户无功电流"] --> REF["i* = Ip*sinθ - Iq*cosθ"]
+    IP --> REF
+    PLL["半波重构 + SOGI-PLL\nsinθ / cosθ"] --> REF
+    REF --> EI(("+/-"))
+    IG["ig\nADCINA2"] --> EI
+    EI --> PR["PR电流内环"] --> SUM["vg前馈与极性组合"]
+    VG["vg重构"] --> SUM
+    SUM --> NORM["除以Vdc并限幅±0.95"] --> LINK["DSP→CPLD实时接口"] --> PLANT["PWM/全桥/L/电网"]
+    PLANT --> IG
+    PLANT --> VDC

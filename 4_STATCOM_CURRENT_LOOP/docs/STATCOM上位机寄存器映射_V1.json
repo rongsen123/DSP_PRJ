@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "device": "3_STATCOM_PI_PR",
+  "protocol": {
+    "mode": "modbus_rtu",
+    "slave_address": 2,
+    "baud_rate": 115200,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "crc_initial": "0xFFFF",
+    "crc_polynomial": "0xA001",
+    "crc_byte_order": "low_first",
+    "register_byte_order": "big_endian",
+    "uint32_word_order": "high_word_first",
+    "protocol_version_register": "0x0000",
+    "expected_protocol_version": "0x0102"
+  },
+  "polling": {
+    "input_function": 4,
+    "input_start_address": "0x0000",
+    "input_quantity": 23,
+    "default_period_ms": 100,
+    "request_timeout_ms": 100,
+    "max_retries": 2
+  },
+  "input_registers": [
+    {"address":"0x0000","name":"protocol_version","type":"u16","unit":"hex"},
+    {"address":"0x0001","name":"uptime_high","type":"u16","combine":"uptime_ms","word":"high"},
+    {"address":"0x0002","name":"uptime_low","type":"u16","combine":"uptime_ms","word":"low","unit":"ms"},
+    {"address":"0x0003","name":"adc_count_high","type":"u16","combine":"adc_sample_count","word":"high"},
+    {"address":"0x0004","name":"adc_count_low","type":"u16","combine":"adc_sample_count","word":"low"},
+    {"address":"0x0005","name":"grid_halfwave_raw","type":"u16","unit":"count","valid_range":[0,4095],"adc_pin_gain":0.000732421875,"provisional_physical_gain":0.2741878,"provisional_physical_unit":"V","calibration_required":true},
+    {"address":"0x0006","name":"iac_raw","type":"u16","unit":"count","valid_range":[0,4095],"engineering_conversion":"use_iac_scaled"},
+    {"address":"0x0007","name":"iac_scaled","type":"s16","scale":0.01,"unit":"A"},
+    {"address":"0x0008","name":"cpld_vdc_raw","type":"u16","unit":"count","valid_range":[0,4095],"calibration_required":true},
+    {"address":"0x0009","name":"cpld_vdc_average","type":"u16","unit":"count","valid_range":[0,4095],"calibration_required":true},
+    {"address":"0x000A","name":"temperature_count","type":"u16","unit":"pulse_per_100ms","calibration_required":true},
+    {"address":"0x000B","name":"cpld_status","type":"bitfield","bitfield":"cpld_status_bits"},
+    {"address":"0x000C","name":"cpld_fault_high","type":"u16","combine":"cpld_fault","word":"high"},
+    {"address":"0x000D","name":"cpld_fault_low","type":"u16","combine":"cpld_fault","word":"low","bitfield":"cpld_fault_bits"},
+    {"address":"0x000E","name":"cpld_link_status","type":"bitfield","bitfield":"cpld_link_bits"},
+    {"address":"0x000F","name":"pll_locked","type":"bool16"},
+    {"address":"0x0010","name":"pll_frequency","type":"u16","scale":0.01,"unit":"Hz","valid_when":"pll_signal_valid == 1"},
+    {"address":"0x0011","name":"pll_signal_valid","type":"bool16"},
+    {"address":"0x0012","name":"statcom_debug_state","type":"enum16","enum":"statcom_states"},
+    {"address":"0x0013","name":"adc_zero_state","type":"enum16","enum":"adc_zero_states"},
+    {"address":"0x0014","name":"dsp_cpld_error_count","type":"u16","unit":"count"},
+    {"address":"0x0015","name":"pc_dsp_error_count","type":"u16","unit":"count"},
+    {"address":"0x0016","name":"cpld_command_echo","type":"enum16","enum":"commands"}
+  ],
+  "holding_registers": [
+    {"address":"0x0100","name":"requested_command","type":"enum16","enum":"commands","read_function":3,"write_functions":[6,16],"fc16_quantity":1,"allowed_values":[0,1]},
+    {"address":"0x0101","name":"clear_cpld_latched_fault","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xA55A","requires":"requested_command == STOP","readback":"0=idle,1=pending"},
+    {"address":"0x0102","name":"reset_cpld","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xC33C","requires":"requested_command == STOP"},
+    {"address":"0x0103","name":"reset_dsp","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xD55D","requires":"requested_command == STOP"},
+    {"address":"0x0104","name":"adc_zero_recalibrate","type":"action16","read_function":3,"write_functions":[6],"write_key":"0xCA1B","requires":"requested_command == STOP and adc_zero_state != RUNNING","readback":"adc_zero_state"}
+  ],
+  "bitfields": {
+    "cpld_status_bits": {
+      "0":"link_online",
+      "1":"adc_valid",
+      "2":"temperature_valid",
+      "3":"fault_any",
+      "4":"pwm_healthy"
+    },
+    "cpld_link_bits": {
+      "0":"online",
+      "1":"timeout_offline",
+      "2":"crc_error_seen",
+      "3":"exception_seen"
+    },
+    "cpld_fault_bits": {
+      "0":"bypass_status",
+      "1":"peer_module_fault",
+      "2":"reserved",
+      "3":"reserved",
+      "4":"dc_overvoltage_fault",
+      "5":"drive_fault_1",
+      "6":"drive_fault_2",
+      "7":"software_vdc_overvoltage",
+      "8":"temperature_over",
+      "9":"reserved",
+      "10":"uart_frame_error",
+      "11":"temperature_sensor_fault",
+      "12":"precharge_under",
+      "13":"precharge_over",
+      "14":"precharge_timeout",
+      "15":"adc_stale",
+      "16":"reserved",
+      "17":"reserved",
+      "18":"pwm_monitor_fault",
+      "19":"dsp_cpld_link_timeout",
+      "20":"reserved",
+      "21":"reserved",
+      "22":"config_invalid",
+      "23":"reserved",
+      "24":"reserved",
+      "25":"reserved",
+      "26":"reserved",
+      "27":"reserved",
+      "28":"reserved",
+      "29":"reserved",
+      "30":"reserved",
+      "31":"reserved"
+    }
+  },
+  "enums": {
+    "commands": {"0":"STOP","1":"START"},
+    "adc_zero_states": {"0":"IDLE","1":"RUNNING","2":"DONE"},
+    "statcom_states": {
+      "0":"SAFE_BOOT",
+      "1":"ADC_VERIFY",
+      "2":"LINK_VERIFY",
+      "3":"PLL_MONITOR",
+      "4":"CONTROL_SHADOW",
+      "5":"CURRENT_LOOP",
+      "6":"VOLTAGE_LOOP",
+      "7":"RUN",
+      "8":"FAULT"
+    }
+  },
+  "reserved_holding_ranges": [
+    {"start":"0x1000","end":"0x10FF","purpose":"protection_and_soft_start","implemented":false},
+    {"start":"0x1100","end":"0x11FF","purpose":"pll_parameters","implemented":false},
+    {"start":"0x1200","end":"0x12FF","purpose":"current_loop_parameters","implemented":false},
+    {"start":"0x1300","end":"0x13FF","purpose":"voltage_loop_parameters","implemented":false}
+  ]
+}

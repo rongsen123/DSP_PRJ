@@ -1,0 +1,10 @@
+flowchart LR
+    GRID["单相电网\n220 V rms / 50 Hz"] --> L["并网电抗器\nL = 0.5 mH"] --> BRIDGE["单相全桥功率级"]
+    BRIDGE --> DCBUS["直流母线\nC = 4×650 uF = 2.6 mF"]
+    DCBUS --> LOSS["空载损耗/可控测试负载"]
+    VGRID["VDC1模拟前端\n电网正半波"] -->|"ADCINA0"| DSP["DSP TMS320F28062"]
+    IGRID["IAC1电流传感器\n电抗器电流"] -->|"ADCINA2"| DSP
+    DCBUS -->|"CPLD ADC采样"| CPLD["CPLD安全执行器"]
+    CPLD -->|"光纤上行：Vdc/状态/故障\n协议待最终冻结"| DSP
+    DSP -->|"光纤下行：PWM或调制命令/使能/复位\n物理形式与周期待确认"| CPLD
+    CPLD -->|"死区、封锁、门极与硬件保护"| BRIDGE
