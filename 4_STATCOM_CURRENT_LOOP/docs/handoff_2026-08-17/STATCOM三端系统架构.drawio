@@ -1,0 +1,33 @@
+<mxfile host="app.diagrams.net" modified="2026-08-17T12:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram name="STATCOM三端系统架构" id="statcom-handoff">
+    <mxGraphModel dx="1400" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="pc" value="PC上位机&#xa;PyQt5 / Modbus主站&#xa;115200, 8N1, 地址2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f766e;strokeColor=#5eead4;fontColor=#ffffff;fontSize=14;" vertex="1" parent="1"><mxGeometry x="40" y="260" width="220" height="110" as="geometry"/></mxCell>
+        <mxCell id="dsp_lane" value="DSP：TMS320F28062 / 90 MHz" style="swimlane;whiteSpace=wrap;html=1;fillColor=#172033;strokeColor=#60a5fa;fontColor=#ffffff;fontSize=16;" vertex="1" parent="1"><mxGeometry x="350" y="80" width="580" height="500" as="geometry"/></mxCell>
+        <mxCell id="scib" value="SCI-B从站&#xa;GPIO22 TX&#xa;GPIO23 RX" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e3a8a;strokeColor=#93c5fd;fontColor=#ffffff;" vertex="1" parent="dsp_lane"><mxGeometry x="25" y="205" width="135" height="80" as="geometry"/></mxCell>
+        <mxCell id="modbus" value="Modbus RTU&#xa;寄存器映射0x0103&#xa;START/STOP/维护命令" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e3a8a;strokeColor=#93c5fd;fontColor=#ffffff;" vertex="1" parent="dsp_lane"><mxGeometry x="195" y="190" width="165" height="110" as="geometry"/></mxCell>
+        <mxCell id="scia" value="SCI-A主站&#xa;GPIO12 TX&#xa;GPIO7 RX" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e3a8a;strokeColor=#93c5fd;fontColor=#ffffff;" vertex="1" parent="dsp_lane"><mxGeometry x="400" y="205" width="135" height="80" as="geometry"/></mxCell>
+        <mxCell id="adc" value="ePWM1 SOCA 20 kHz&#xa;SOC0 ADCINA0：电网正半波&#xa;SOC1 ADCINA2：交流电流&#xa;EOC1 → ADCINT1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3f1d69;strokeColor=#c4b5fd;fontColor=#ffffff;" vertex="1" parent="dsp_lane"><mxGeometry x="25" y="340" width="230" height="115" as="geometry"/></mxCell>
+        <mxCell id="pll" value="ISR固定5:1抽取&#xa;4 kHz / 80点去直流&#xa;半波SOGI-PLL&#xa;已上板锁定" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3f1d69;strokeColor=#c4b5fd;fontColor=#ffffff;" vertex="1" parent="dsp_lane"><mxGeometry x="305" y="340" width="230" height="115" as="geometry"/></mxCell>
+        <mxCell id="cpld_lane" value="CPLD：MAX II EPM1270T144C5 / 30 MHz" style="swimlane;whiteSpace=wrap;html=1;fillColor=#272316;strokeColor=#fbbf24;fontColor=#ffffff;fontSize=16;" vertex="1" parent="1"><mxGeometry x="1020" y="45" width="335" height="590" as="geometry"/></mxCell>
+        <mxCell id="uart" value="光纤UART + Modbus从站1&#xa;PIN42 RX（顶层反相）&#xa;PIN43 TX&#xa;FC03/04/06" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#713f12;strokeColor=#fde68a;fontColor=#ffffff;" vertex="1" parent="cpld_lane"><mxGeometry x="30" y="55" width="275" height="100" as="geometry"/></mxCell>
+        <mxCell id="sense" value="ADS7818直流电压&#xa;12位原始码 + 256点平均&#xa;温度100 ms脉冲计数" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#713f12;strokeColor=#fde68a;fontColor=#ffffff;" vertex="1" parent="cpld_lane"><mxGeometry x="30" y="195" width="275" height="100" as="geometry"/></mxCell>
+        <mxCell id="fault" value="故障锁存与分类&#xa;清故障0x0101&#xa;软复位0x0102&#xa;UART/CRC/残帧计数" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#713f12;strokeColor=#fde68a;fontColor=#ffffff;" vertex="1" parent="cpld_lane"><mxGeometry x="30" y="335" width="275" height="105" as="geometry"/></mxCell>
+        <mxCell id="safe" value="功率输出硬封锁&#xa;4路桥臂=0&#xa;pwm_hold=1&#xa;风机/旁路继电器不动作" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7f1d1d;strokeColor=#fca5a5;fontColor=#ffffff;" vertex="1" parent="cpld_lane"><mxGeometry x="30" y="475" width="275" height="85" as="geometry"/></mxCell>
+        <mxCell id="grid" value="电网正半波&#xa;ADCINA0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#374151;strokeColor=#9ca3af;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="390" y="660" width="150" height="65" as="geometry"/></mxCell>
+        <mxCell id="current" value="交流电流传感器&#xa;ADCINA2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#374151;strokeColor=#9ca3af;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="570" y="660" width="160" height="65" as="geometry"/></mxCell>
+        <mxCell id="cpld_sensors" value="ADS7818 / 温度 / 故障输入" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#374151;strokeColor=#9ca3af;fontColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="1080" y="685" width="215" height="65" as="geometry"/></mxCell>
+        <mxCell id="e_pc" value="SCI-B / Modbus RTU" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;startArrow=block;strokeColor=#5eead4;fontColor=#d1fae5;" edge="1" parent="1" source="pc" target="scib"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_dsp" value="SCI-A光纤 / Modbus RTU" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;startArrow=block;strokeColor=#fbbf24;fontColor=#fef3c7;" edge="1" parent="1" source="scia" target="uart"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#93c5fd;" edge="1" parent="dsp_lane" source="scib" target="modbus"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#93c5fd;" edge="1" parent="dsp_lane" source="modbus" target="scia"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="每5点保留1点" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#c4b5fd;fontColor=#ede9fe;" edge="1" parent="dsp_lane" source="adc" target="pll"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9ca3af;" edge="1" parent="1" source="grid" target="adc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ei" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9ca3af;" edge="1" parent="1" source="current" target="adc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="es" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9ca3af;" edge="1" parent="1" source="cpld_sensors" target="sense"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1380" height="720" viewBox="0 0 1380 720">
+  <rect width="1380" height="720" fill="#07090d"/>
+  <style>.t{font:15px 'Segoe UI',Arial;fill:#f3f4f6}.h{font:bold 18px 'Segoe UI',Arial;fill:#fff}.s{font:13px 'Segoe UI',Arial;fill:#cbd5e1}.box{rx:10;stroke-width:2}.edge{fill:none;stroke-width:3;marker-end:url(#a)} </style>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker></defs>
+  <rect class="box" x="35" y="275" width="220" height="115" fill="#0f766e" stroke="#5eead4"/><text class="h" x="70" y="310">PC上位机</text><text class="t" x="58" y="340">PyQt5 / Modbus主站</text><text class="s" x="58" y="368">115200, 8N1，从站地址2</text>
+  <rect class="box" x="330" y="55" width="610" height="550" fill="#111827" stroke="#60a5fa"/><text class="h" x="355" y="88">DSP · TMS320F28062 · 90 MHz</text>
+  <rect class="box" x="365" y="150" width="150" height="95" fill="#1e3a8a" stroke="#93c5fd"/><text class="t" x="405" y="182">SCI-B从站</text><text class="s" x="383" y="208">GPIO22 TX / GPIO23 RX</text><text class="s" x="407" y="230">Modbus地址2</text>
+  <rect class="box" x="560" y="150" width="150" height="95" fill="#1e3a8a" stroke="#93c5fd"/><text class="t" x="585" y="182">寄存器/维护</text><text class="s" x="582" y="208">START/STOP</text><text class="s" x="580" y="230">清故障/复位/校零</text>
+  <rect class="box" x="755" y="150" width="150" height="95" fill="#1e3a8a" stroke="#93c5fd"/><text class="t" x="796" y="182">SCI-A主站</text><text class="s" x="773" y="208">GPIO12 TX / GPIO7 RX</text><text class="s" x="786" y="230">20 ms轮询</text>
+  <rect class="box" x="380" y="360" width="230" height="145" fill="#3f1d69" stroke="#c4b5fd"/><text class="t" x="418" y="392">两路ADC · 20 kHz</text><text class="s" x="400" y="422">ADCINA0：电网正半波</text><text class="s" x="400" y="447">ADCINA2：交流电流</text><text class="s" x="400" y="472">EOC1 → ADCINT1</text>
+  <rect class="box" x="665" y="360" width="230" height="145" fill="#3f1d69" stroke="#c4b5fd"/><text class="t" x="710" y="392">SOGI-PLL · 4 kHz</text><text class="s" x="690" y="422">ISR固定5:1抽取</text><text class="s" x="690" y="447">80点去直流 + 陷波</text><text class="s" x="690" y="472">上板已锁定</text>
+  <rect class="box" x="1010" y="55" width="335" height="550" fill="#211c10" stroke="#fbbf24"/><text class="h" x="1040" y="88">CPLD · EPM1270T144C5 · 30 MHz</text>
+  <rect class="box" x="1045" y="125" width="265" height="95" fill="#713f12" stroke="#fde68a"/><text class="t" x="1082" y="157">光纤UART / Modbus从站1</text><text class="s" x="1070" y="185">PIN42 RX（顶层反相）/ PIN43 TX</text>
+  <rect class="box" x="1045" y="255" width="265" height="95" fill="#713f12" stroke="#fde68a"/><text class="t" x="1090" y="287">ADS7818 / 温度采集</text><text class="s" x="1070" y="315">Vdc原始码、256点平均、100ms计数</text>
+  <rect class="box" x="1045" y="385" width="265" height="95" fill="#713f12" stroke="#fde68a"/><text class="t" x="1090" y="417">故障锁存与维护动作</text><text class="s" x="1070" y="445">UART/CRC/残帧分类，清故障/复位</text>
+  <rect class="box" x="1045" y="515" width="265" height="65" fill="#7f1d1d" stroke="#fca5a5"/><text class="t" x="1090" y="545">功率输出硬封锁</text><text class="s" x="1080" y="568">桥臂=0，pwm_hold=1，继电器不动作</text>
+  <path class="edge" d="M255 332H365" stroke="#5eead4"/><text class="s" x="275" y="320">SCI-B</text><path class="edge" d="M905 197H1045" stroke="#fbbf24"/><text class="s" x="940" y="185">SCI-A光纤</text><path class="edge" d="M610 432H665" stroke="#c4b5fd"/><text class="s" x="612" y="420">5:1</text>
+  <text class="s" x="35" y="680">协议：Modbus RTU CRC16/A001，CRC低字节先发；当前协议版本0x0103。当前阶段仅通信、采样、锁相和维护调试，不允许功率输出。</text>
+</svg>

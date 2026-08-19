@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>单相STATCOM三端系统工程交底书</title>
+  <style>
+    :root{--bg:#050505;--panel:#111318;--panel2:#171a21;--text:#f3f4f6;--muted:#a8b0bd;--line:#303744;--accent:#3dd6d0;--blue:#60a5fa;--warn:#f4c542;--bad:#ff6b6b;--good:#42d392}
+    *{box-sizing:border-box} body.fpga-report{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI","Microsoft YaHei",Arial,sans-serif;line-height:1.62}
+    main{max-width:1260px;margin:0 auto;padding:30px 24px 64px} header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:24px}
+    h1,h2,h3,h4{line-height:1.28;margin:0 0 13px} h1{font-size:34px} h2{font-size:24px;margin-top:36px;color:var(--accent)} h3{font-size:19px;margin-top:22px;color:#dbeafe} h4{font-size:16px;color:#fde68a}
+    p{margin:0 0 12px}.muted{color:var(--muted)}.lead{font-size:17px}.panel,.module-card,figure{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin:15px 0}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px}.metric{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px}.metric strong{display:block;color:var(--accent);margin-bottom:5px}
+    table{width:100%;border-collapse:collapse;margin:13px 0 20px;font-size:14px}th,td{border:1px solid var(--line);padding:9px 11px;vertical-align:top}th{background:var(--panel2);color:var(--accent);text-align:left}td{color:var(--text)}
+    code,pre{background:#0b0d11;color:#d7e1ea;border:1px solid var(--line);border-radius:6px}code{padding:1px 5px}pre{overflow:auto;padding:12px;white-space:pre-wrap}a{color:var(--accent)}ul,ol{margin-top:6px}.status-done{color:var(--good);font-weight:700}.status-partial{color:var(--warn);font-weight:700}.status-missing,.status-risk{color:var(--bad);font-weight:700}.status-confirm{color:#c4b5fd;font-weight:700}
+    .diagram object{width:100%;min-height:520px;background:#07090d;border-radius:6px}.note{border-left:4px solid var(--warn);padding:10px 12px;background:#211c10}.ok{border-left:4px solid var(--good);padding:10px 12px;background:#0c2018}.bad{border-left:4px solid var(--bad);padding:10px 12px;background:#260e0e}.tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px;color:var(--muted)}
+    @media print{body.fpga-report{background:#fff;color:#111}main{max-width:none}.panel,.module-card,figure,.metric{background:#fff;color:#111}td,p,li{color:#111}h2{color:#075985}}
+  </style>
+  <script src="https://wavedrom.com/skins/default.js"></script>
+  <script src="https://wavedrom.com/wavedrom.min.js"></script>
+</head>
+<body class="fpga-report">
+<main>
+  <header>
+    <h1>单相STATCOM三端系统工程交底书</h1>
+    <p class="lead">范围：3号DSP工程 + 配套CPLD工程 + Windows上位机</p>
+    <p class="muted">交底日期：2026-08-17　协议基线：V0x0103　用途：后续电流环/功率级开发前的工程状态冻结与接口交接</p>
+  </header>
+
+  <section id="project-overview">
+    <h2>1. 项目概览与结论</h2>
+    <div class="summary-grid">
+      <div class="metric"><strong>DSP工程</strong><span>F:\DSP\SST_PRJ\3_STATCOM_PI_PR<br>TMS320F28062 / CCS / 90 MHz</span></div>
+      <div class="metric"><strong>CPLD工程</strong><span>F:\Quartus_project\SST_prj\CPLD_EPM1270_STATCOM_MODBUS<br>MAX II EPM1270T144C5 / 30 MHz</span></div>
+      <div class="metric"><strong>上位机</strong><span>3_STATCOM_PI_PR\docs\statcom_host<br>PyQt5 / Python / 可打包EXE</span></div>
+      <div class="metric"><strong>当前结论</strong><span class="status-done">双SCI链路稳定，PLL已上板锁定</span><br><span class="status-risk">功率输出仍硬封锁</span></div>
+    </div>
+    <div class="ok"><strong>已形成的可用基线：</strong>PC经SCI-B读写DSP，DSP经SCI-A轮询CPLD；CPLD上传直流电压原始码、温度计数、状态与故障；DSP上传两路ADC、PLL、CPLD转发数据和四层通信诊断；上位机具备监控、趋势、日志、维护命令和物理量换算界面。</div>
+    <div class="bad"><strong>明确边界：</strong>当前工程不是可带功率运行的软件。DSP定义<code>STATCOM_POWER_OUTPUT_ENABLED=0</code>；CPLD四路桥臂固定为0、<code>pwm_hold_o=1</code>、风机和旁路继电器保持不动作。START仅记录、转发和回读。</div>
+  </section>
+
+  <section id="requirements">
+    <h2>2. 需求拆解</h2>
+    <table><thead><tr><th>ID</th><th>需求</th><th>来源</th><th>设计影响</th><th>状态</th></tr></thead><tbody>
+      <tr><td>REQ-001</td><td>DSP与CPLD通过SCI-A/光纤采用Modbus RTU通信</td><td>3号工程计划与板间联调</td><td>DSP为主站，CPLD地址1；115200 8N1</td><td class="status-done">已完成</td></tr>
+      <tr><td>REQ-002</td><td>PC与DSP通过SCI-B采用Modbus RTU通信</td><td>上位机调试需求</td><td>PC为主站，DSP地址2；支持FC03/04/06/10</td><td class="status-done">已完成</td></tr>
+      <tr><td>REQ-003</td><td>DSP采集电网正半波和交流电流，完成SOGI-PLL</td><td>锁相调试需求</td><td>ADC硬件20 kHz，两路；ISR 5:1抽取，PLL 4 kHz</td><td class="status-done">已锁定，鲁棒性待扩展</td></tr>
+      <tr><td>REQ-004</td><td>CPLD上传直流电压、温度、故障、状态和通信诊断</td><td>硬件监控需求</td><td>ADS7818、100 ms温度计数、32位故障、错误分类</td><td class="status-partial">数据链路完成，标定待完成</td></tr>
+      <tr><td>REQ-005</td><td>上位机支持START/STOP、清故障、复位CPLD/DSP、ADC重新校零</td><td>维护操作需求</td><td>0x0100～0x0104，密钥与STOP联锁</td><td class="status-done">当前调试阶段已实现</td></tr>
+      <tr><td>REQ-006</td><td>通信命令不得解除功率级安全封锁</td><td>第一阶段安全约束</td><td>DSP编译期封锁 + CPLD输出常量安全态</td><td class="status-done">已完成</td></tr>
+      <tr><td>REQ-007</td><td>后续实现20 kHz电流环、PWM和直流电压环</td><td>下一阶段目标</td><td>需要双速率调度、PR/PI影子运行、低压分级验证</td><td class="status-missing">未完成</td></tr>
+    </tbody></table>
+  </section>
+
+  <section id="architecture">
+    <h2>3. 系统架构</h2>
+    <figure class="diagram drawio-diagram" data-source="STATCOM三端系统架构.drawio">
+      <figcaption>三端系统顶层框图（DSP、CPLD、上位机及双SCI数据方向）</figcaption>
+      <object data="STATCOM三端系统架构.svg" type="image/svg+xml" aria-label="STATCOM三端系统顶层框图"><p>浏览器不支持SVG，请打开draw.io源文件。</p></object>
+      <p><a href="STATCOM三端系统架构.drawio">打开可编辑draw.io源文件</a>　|　<a href="STATCOM三端系统架构.svg">打开SVG预览</a></p>
+    </figure>
+    <table><thead><tr><th>链路</th><th>角色</th><th>物理接口</th><th>参数</th><th>调度与超时</th></tr></thead><tbody>
+      <tr><td>PC ↔ DSP</td><td>PC主站 / DSP从站2</td><td>SCI-B：GPIO22 TX、GPIO23 RX</td><td>115200 bit/s，8N1，CRC16/A001，CRC低字节先发</td><td>上位机优先级队列；串口读超时默认100 ms；STOP最高优先级</td></tr>
+      <tr><td>DSP ↔ CPLD</td><td>DSP主站 / CPLD从站1</td><td>SCI-A：GPIO12 TX、GPIO7 RX；CPLD PIN42 RX、PIN43 TX</td><td>115200目标速率；CPLD 30 MHz下<code>CLKS_PER_BIT=256</code>，实际约117187.5 bit/s</td><td>20 ms轮询；20 ms响应超时；重试2次；500 ms无有效响应判离线</td></tr>
+      <tr><td>DSP采样/锁相</td><td>ePWM1 → ADCINT1 → 前台PLL</td><td>ADCINA0电网正半波；ADCINA2交流电流</td><td>ADC 20 kHz；每5点保留1点；PLL 4 kHz</td><td>256组4 kHz队列覆盖约64 ms；每次最多批处理128点</td></tr>
+    </tbody></table>
+  </section>
+
+  <section id="module-implementation">
+    <h2>4. 模块实现说明</h2>
+    <article class="module-card"><h3>4.1 DSP启动、时钟与安全基线</h3><table><tbody>
+      <tr><th>源文件</th><td><code>main.c</code>、<code>cmd/F28062.cmd</code>、<code>app/statcom_config.h</code></td></tr>
+      <tr><th>实现</th><td>系统时钟90 MHz；在<code>InitAdc()</code>前复制<code>ramfuncs</code>，修复<code>DELAY_US()</code>卡死；初始化PIE、LED、双SCI、ADC和运行状态。</td></tr>
+      <tr><th>安全</th><td><code>STATCOM_POWER_OUTPUT_ENABLED=0</code>，运行状态只监视，不产生PWM。</td></tr>
+      <tr><th>证据</th><td>CCS Debug完整编译链接通过，OUT可加载运行；此前DELAY_US启动问题已消除。</td></tr>
+    </tbody></table></article>
+
+    <article class="module-card"><h3>4.2 DSP两路ADC、零漂与物理量换算</h3><table><tbody>
+      <tr><th>源文件</th><td><code>app/adc.c</code>、<code>app/adc.h</code></td></tr>
+      <tr><th>采样契约</th><td>ePWM1 SOCA 20 kHz，TBPRD=4499；SOC0=ADCINA0电网正半波；SOC1=ADCINA2交流电流；EOC1触发ADCINT1。ADCINA1直流电流通道已停用。</td></tr>
+      <tr><th>队列/调度</th><td>ISR读取两路原始码并每5次固定入队1组，保证4 kHz均匀时基；前台批量处理，<code>adc_processed_count≈adc_sample_count/5</code>、<code>adc_pll_sample_count≈adc_processed_count</code>。</td></tr>
+      <tr><th>换算</th><td>电网正半波当前沿用<code>0.2741878 V/count</code>；交流电流为<code>(raw-offset)×0.09887695 A/count</code>。交流电流零漂取1024个4 kHz保留样本，约256 ms。</td></tr>
+      <tr><th>验收量</th><td><code>adc_queue_overflow_count=0</code>；全速运行期间<code>adc_overflow_count=0</code>；两个处理计数满足上述比例。</td></tr>
+    </tbody></table></article>
+
+    <article class="module-card"><h3>4.3 DSP半波SOGI-PLL</h3><table><tbody>
+      <tr><th>源文件</th><td><code>app/grid_pll.c</code>、<code>app/grid_pll.h</code>、<code>app/statcom_config.h</code></td></tr>
+      <tr><th>输入处理</th><td>4 kHz输入；80点滑动均值去除半波直流分量；乘2恢复基波；归一化后进入SOGI。</td></tr>
+      <tr><th>环路</th><td>SOGI α/β、Park域误差、50/150/250 Hz陷波、PI频率校正、45～55 Hz有效范围及锁定/解锁计数。</td></tr>
+      <tr><th>证据</th><td>4 kHz参考向量6项测试通过；用户于2026-08-17确认实际电网输入下已经锁相。</td></tr>
+      <tr><th>限制</th><td>尚未形成完整的频率扫动、电压跌落、谐波、零点相位偏差和长时间重锁验收报告。</td></tr>
+    </tbody></table></article>
+
+    <article class="module-card"><h3>4.4 DSP双SCI与Modbus网关</h3><table><tbody>
+      <tr><th>源文件</th><td><code>app/sci.c</code>、<code>app/sci.h</code>、<code>app/cpld_link.c/h</code></td></tr>
+      <tr><th>SCI-A</th><td>DSP作为Modbus主站轮询CPLD地址1，读取14个输入寄存器，转发START/STOP、清故障和CPLD复位。</td></tr>
+      <tr><th>SCI-B</th><td>DSP作为Modbus从站2，响应上位机FC03/04/06/10；支持异常码01/02/03。</td></tr>
+      <tr><th>可靠性处理</th><td>环形接收、t3.5判帧、CRC、FIFO/硬件错误恢复；V0x0103分离CPLD UART、CRC、残帧以及DSP SCI-A格式/溢出/等待超时计数。</td></tr>
+      <tr><th>证据</th><td>板间连续约47分钟、累计超过10万帧，DSP与CPLD相关错误计数保持0；SCI-B串口助手与上位机实测成功。</td></tr>
+    </tbody></table></article>
+
+    <article class="module-card"><h3>4.5 CPLD顶层、采样与故障安全</h3><table><tbody>
+      <tr><th>顶层/器件</th><td><code>rtl/top.v</code>；MAX II EPM1270T144C5；30 MHz；有效低逻辑复位。</td></tr>
+      <tr><th>活动子模块</th><td><code>ads7818_acquisition_controller</code>、<code>adc_block_average</code>、<code>temperature_frequency_monitor</code>、<code>fiber_uart_byte_receiver/transmitter</code>、<code>modbus_rtu_slave_fixed8</code>、<code>system_fault_monitor</code>。</td></tr>
+      <tr><th>传感数据</th><td>ADS7818 12位最新码和256点平均；温度100 ms脉冲计数；旁路、对端模块、直流过压、两路驱动、链路与协议错误等故障。</td></tr>
+      <tr><th>物理极性</th><td>PIN42物理空闲低，顶层执行<code>fiber_uart_rx_w=~fiber_rx_i</code>后送标准UART；该关系是当前稳定通信基线，不应随意删除。</td></tr>
+      <tr><th>安全态</th><td>四路桥臂常0、<code>pwm_hold_o=1</code>、风机/旁路继电器不动作；START只回显。</td></tr>
+      <tr><th>构建证据</th><td>Quartus 13.1 Fitter成功；1012/1270逻辑单元（80%）；最差Setup slack 8.056 ns、Hold slack 1.078 ns、TNS=0。</td></tr>
+    </tbody></table></article>
+
+    <article class="module-card"><h3>4.6 CPLD Modbus从站与维护动作</h3><table><tbody>
+      <tr><th>源文件</th><td><code>rtl/modbus_rtu_slave_fixed8.v</code>、UART收发RTL、<code>tb/tb_modbus_rtu_slave_fixed8.v</code></td></tr>
+      <tr><th>协议</th><td>地址1，固定8字节请求，FC03/04/06，CRC16/A001，1.75 ms帧间隔，500 ms链路超时。</td></tr>
+      <tr><th>维护</th><td><code>0101=A55A</code>产生清故障脉冲；<code>0102=C33C</code>在FC06回显发完后产生软复位脉冲；均要求STOP。</td></tr>
+      <tr><th>诊断</th><td>有效帧、综合错误、UART停止位错误、CRC错误、t3.5残帧分别计数；LED1～4分别辅助观察字节、在线、有效帧和错误活动。</td></tr>
+      <tr><th>证据</th><td>存在自检Testbench，覆盖FC04、清故障密钥、非法值及软复位；硬件板间通信已长期稳定。</td></tr>
+    </tbody></table></article>
+
+    <article class="module-card"><h3>4.7 Windows上位机</h3><table><tbody>
+      <tr><th>源文件</th><td><code>docs/statcom_host/main.py</code>、<code>communication/</code>、<code>protocol/</code>、<code>storage/</code>、<code>ui/</code>、<code>tests/test_protocol.py</code></td></tr>
+      <tr><th>通信</th><td>PySerial + 独立工作线程；优先级队列中STOP最高，维护命令次之，START再次，读保持寄存器和周期FC04最低；周期读取去重，避免积压。</td></tr>
+      <tr><th>界面</th><td>实时总览、29寄存器全表、趋势波形、32位故障、事件记录、四层通信诊断、原始TX/RX帧、CSV记录。</td></tr>
+      <tr><th>维护</th><td>START/STOP、清CPLD故障、复位CPLD、复位DSP、ADC重新校零，包含协议版本、STOP状态和二次确认检查。</td></tr>
+      <tr><th>数据换算</th><td>CPLD Vdc：<code>max(0,(count-zero)×gain)</code>，默认理论增益0.28568177 V/count；温度当前只显示<code>count×10 Hz</code>，摄氏度换算待标定；DSP交流电流使用固件上传的0.01 A/LSB。</td></tr>
+      <tr><th>证据</th><td>协议单元测试存在并通过；真实串口已读取29寄存器并执行维护命令；已配置PyInstaller SPEC，可生成EXE，但生成目录不作为源码基线。</td></tr>
+    </tbody></table></article>
+  </section>
+
+  <section id="module-handoff">
+    <h2>5. 接口与模块交接</h2>
+    <table><thead><tr><th>模块</th><th>接口所有者必须知道</th><th>集成假设/配置</th><th>测试方法</th><th>禁止事项</th></tr></thead><tbody>
+      <tr><td>DSP ADC/PLL</td><td>ADCINA0是电网正半波，不是直流母线；ADCINA2是交流电流；PLL时基4 kHz</td><td>ADC转换20 kHz，ISR每5点固定入队1点；80点窗口</td><td>CCS观察计数比例、overflow、α/β、q误差、频率、锁定</td><td>不得把实际直流母线数据接入PLL；不得在前台丢样后仍假设固定时基</td></tr>
+      <tr><td>DSP SCI-A</td><td>GPIO12 TX、GPIO7 RX；主站；地址1</td><td>115200 8N1；20 ms轮询；20 ms超时；500 ms离线</td><td>观察<code>modbus_cpld_stats</code>和<code>cpld_link_status</code></td><td>不得用于20 kHz PWM或逐周期控制量传输</td></tr>
+      <tr><td>DSP SCI-B</td><td>GPIO22 TX、GPIO23 RX；从站2</td><td>协议V0x0103；29个FC04输入寄存器</td><td>发送<code>02 04 00 00 00 1D 30 30</code></td><td>不得把1.75 ms静默误计为业务超时</td></tr>
+      <tr><td>CPLD UART</td><td>PIN42物理空闲低，顶层需要反相；PIN43标准UART TX</td><td>30 MHz；CLKS_PER_BIT=256；请求固定8字节</td><td>LED1字节活动、LED2在线、LED3有效帧、LED4错误；读错误分类计数</td><td>不得只凭“115200”标签修改极性或分频，必须联调验证</td></tr>
+      <tr><td>CPLD安全输出</td><td>当前输出被RTL常量封锁</td><td>START只更新回显；清故障只清已消失故障源</td><td>写START后实测四路PWM=0、hold=1、继电器不动作</td><td>未完成独立安全评审前不得解除常量封锁</td></tr>
+      <tr><td>上位机</td><td>从站2；读29寄存器；维护命令带密钥</td><td>默认115200、100 ms串口超时；STOP优先级最高</td><td>仿真器测试 + 真实串口 + 原始帧诊断</td><td>不得把FC06回显等同于最终物理动作成功，需回读状态验证</td></tr>
+    </tbody></table>
+
+    <h3>5.1 Modbus寄存器契约摘要</h3>
+    <table><thead><tr><th>设备</th><th>功能码/地址</th><th>内容</th><th>备注</th></tr></thead><tbody>
+      <tr><td>CPLD地址1</td><td>FC04 0000～000D</td><td>协议、心跳、Vdc原始/平均、温度计数、状态、32位故障、命令回显、有效帧及UART/CRC/残帧错误</td><td>32位量高字在低地址</td></tr>
+      <tr><td>CPLD地址1</td><td>FC03/06 0100</td><td>STOP=0、START=1</td><td>只回显，不解除输出封锁</td></tr>
+      <tr><td>CPLD地址1</td><td>FC06 0101/0102</td><td>清故障A55A / 软复位C33C</td><td>STOP联锁</td></tr>
+      <tr><td>DSP地址2</td><td>FC04 0000～001C</td><td>协议、运行时间、ADC计数、两路ADC、交流电流、CPLD数据、PLL、状态、校准、四层通信诊断</td><td>协议V0x0103共29个寄存器</td></tr>
+      <tr><td>DSP地址2</td><td>FC03/06 0100</td><td>上位机请求STOP/START</td><td>DSP转发并通过0016读取CPLD回显</td></tr>
+      <tr><td>DSP地址2</td><td>FC06 0101～0104</td><td>清CPLD故障A55A、复位CPLD C33C、复位DSP D55D、ADC校零CA1B</td><td>维护动作均要求STOP；DSP复位先回显后触发</td></tr>
+      <tr><td>预留</td><td>1000～13FF</td><td>保护、PLL、电流环、电压环参数</td><td>当前访问必须返回异常02，不返回假参数</td></tr>
+    </tbody></table>
+    <p>完整地址逐项定义见：<code>docs/MODBUS_RTU_REGISTER_MAP.md</code>与<code>docs/STATCOM上位机寄存器映射_V1.json</code>。</p>
+  </section>
+
+  <section id="module-status">
+    <h2>6. 完成状态与证据</h2>
+    <table><thead><tr><th>模块</th><th>完成度</th><th>证据</th><th>缺口</th><th>下一步</th></tr></thead><tbody>
+      <tr><td>DSP启动/ramfuncs</td><td class="status-done">已完成</td><td>CCS编译及上板启动</td><td>无当前阻塞</td><td>保持链接脚本与启动顺序</td></tr>
+      <tr><td>DSP两路ADC/4 kHz队列</td><td class="status-partial">部分完成</td><td>编译通过，PLL锁相</td><td>需再次确认长期overflow为0；当前交流电流处理仅4 kHz</td><td>为20 kHz电流环增加独立快速路径</td></tr>
+      <tr><td>SOGI-PLL监视</td><td class="status-partial">部分完成</td><td>参考测试6项通过，用户确认上板锁定</td><td>鲁棒性与绝对相位验收未归档</td><td>做频率/电压/失锁/重锁/相位偏差试验</td></tr>
+      <tr><td>DSP双SCI/Modbus</td><td class="status-done">已完成</td><td>板间10万帧级零错误；PC串口实测</td><td>尚无自动化长稳测试脚本</td><td>保留错误分类计数并形成30分钟自动报告</td></tr>
+      <tr><td>CPLD UART/Modbus</td><td class="status-done">已完成</td><td>Quartus成功、Testbench、硬件稳定通信</td><td>资源已达80%，扩展空间有限</td><td>新增RTL前先评估逻辑资源</td></tr>
+      <tr><td>CPLD Vdc/温度</td><td class="status-partial">部分完成</td><td>原始码/平均码/计数已上传</td><td>Vdc两点标定与温度摄氏度曲线未完成</td><td>实物标定并冻结系数/传感器型号</td></tr>
+      <tr><td>CPLD故障/复位/安全态</td><td class="status-partial">部分完成</td><td>RTL、命令回显、界面操作、硬安全常量</td><td>需逐个注入硬件故障验证清除条件</td><td>建立故障矩阵与复位验收表</td></tr>
+      <tr><td>Windows上位机</td><td class="status-partial">部分完成</td><td>真实串口、协议测试、趋势/诊断/维护界面</td><td>标定持久化、安装包版本化和异常恢复需继续固化</td><td>冻结发布版本并记录EXE校验值</td></tr>
+      <tr><td>20 kHz电流环/PR</td><td class="status-missing">未完成</td><td>仅有参数占位和规划</td><td>实时路径、影子控制、限幅和抗饱和</td><td>下一阶段首要任务</td></tr>
+      <tr><td>PWM/直流电压环/功率运行</td><td class="status-missing">未完成</td><td>输出被硬封锁</td><td>PWM架构、死区、低压开环、闭环及保护验收</td><td>必须在电流环影子验证后分阶段实施</td></tr>
+    </tbody></table>
+  </section>
+
+  <section id="waveforms">
+    <h2>7. WaveDrom关键时序</h2>
+    <h3>7.1 DSP 20 kHz采样与4 kHz PLL固定抽取</h3>
+    <script type="WaveDrom">
+    { "signal": [
+      {"name":"ePWM1 SOCA","wave":"p..................."},
+      {"name":"ADCINT1/EOC1","wave":"01010101010101010101"},
+      {"name":"sample_index","wave":"====================","data":["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"]},
+      {"name":"queue_push","wave":"0...10...10...10...1"},
+      {"name":"PLL_Run","wave":"0...10...10...10...1"}
+    ], "config":{"hscale":1} }
+    </script>
+    <p class="muted">语义：ADC每50 μs产生一组两路结果；第5、10、15…组进入队列，PLL周期固定为250 μs。队列满时才会失去4 kHz点，因此必须监视<code>adc_queue_overflow_count</code>。</p>
+
+    <h3>7.2 Modbus RTU主从一次问答</h3>
+    <script type="WaveDrom">
+    { "signal": [
+      {"name":"总线静默","wave":"1.0......1...."},
+      {"name":"主站TX","wave":"x.=.=.=.=.=x...","data":["地址","功能码","起址/数量","CRC"]},
+      {"name":"从站解析","wave":"0......10......"},
+      {"name":"从站TX","wave":"x........=.=.=x","data":["地址/功能","数据","CRC"]},
+      {"name":"t3.5判帧","wave":"0...........10."}
+    ], "config":{"hscale":1} }
+    </script>
+    <p class="muted">115200 bit/s下固定1.75 ms静默时间用于帧边界；它不是业务超时。DSP等待CPLD响应的业务超时为20 ms，上位机串口读超时默认100 ms。</p>
+
+    <h3>7.3 CPLD软复位安全顺序</h3>
+    <script type="WaveDrom">
+    { "signal": [
+      {"name":"FC06 0102=C33C","wave":"01.0........"},
+      {"name":"CPLD回显TX","wave":"0..1....0..."},
+      {"name":"tx_done","wave":"0.......10.."},
+      {"name":"soft_reset_o","wave":"0........10."},
+      {"name":"logic_reset_n","wave":"1.........0."},
+      {"name":"pwm_hold_o","wave":"1..........."},
+      {"name":"bridge_pwm","wave":"0..........."}
+    ] }
+    </script>
+    <p class="muted">软复位请求在FC06完整回显发送完成后生效；复位前后功率输出始终保持安全常量。</p>
+  </section>
+
+  <section id="risks">
+    <h2>8. 风险、待确认项与下一步</h2>
+    <table><thead><tr><th>类型</th><th>事项</th><th>影响</th><th>证据</th><th>建议动作</th></tr></thead><tbody>
+      <tr><td class="status-risk">风险</td><td>交流电流当前随PLL队列只处理4 kHz</td><td>不能直接作为20 kHz电流环反馈</td><td><code>adc.c</code>中ISR 5:1入队</td><td>保留PLL 4 kHz，同时为交流电流建立20 kHz快速控制路径</td></tr>
+      <tr><td class="status-risk">风险</td><td>CPLD逻辑资源占用80%</td><td>后续复杂PWM/协议扩展可能超资源</td><td>Fitter 1012/1270 LE</td><td>新增模块前先综合；考虑把控制算法留在DSP或升级器件</td></tr>
+      <tr><td class="status-confirm">待确认</td><td>PLL绝对相位偏差</td><td>频率锁定但电流给定可能有固定相移</td><td>目前仅确认locked与频率</td><td>用零交越/示波器或捕获数据校准theta偏置</td></tr>
+      <tr><td class="status-confirm">待确认</td><td>CPLD Vdc真实比例与零点</td><td>上位机电压可能偏差</td><td>当前默认理论K=0.28568177 V/count</td><td>完成至少两点标定，并保存零点和增益</td></tr>
+      <tr><td class="status-confirm">待确认</td><td>温度计数到摄氏度曲线</td><td>无法直接执行过温定值</td><td>当前只显示Hz</td><td>确认传感器型号并做多温点拟合</td></tr>
+      <tr><td class="status-risk">风险</td><td>解除PWM封锁前缺少独立安全评审</td><td>可能造成桥臂误触发</td><td>当前DSP/CPLD双重硬封锁</td><td>先完成影子电流环、PWM死区、CPLD封锁和故障矩阵验收</td></tr>
+      <tr><td class="status-confirm">待确认</td><td>上位机发布物版本管理</td><td>源码与EXE可能不一致</td><td>存在build/dist和SPEC</td><td>发布时记录源码SHA、依赖版本、EXE SHA256和协议版本</td></tr>
+    </tbody></table>
+
+    <h3>8.1 推荐的下一阶段最小范围</h3>
+    <ol>
+      <li><strong>锁相验收归档：</strong>连续运行、失锁/重锁、电压跌落、45～55 Hz、谐波噪声和绝对相位偏差。</li>
+      <li><strong>交流电流实物标定：</strong>零点、正向一点、负向一点、极性、噪声、温漂，冻结<code>I=(raw-offset)×K</code>。</li>
+      <li><strong>双速率重构：</strong>交流电流/保护/未来PR控制保持20 kHz；PLL继续4 kHz；SCI继续低优先级通信路径。</li>
+      <li><strong>影子电流环：</strong>用PLL角度生成电流给定，运行PR、限幅和抗饱和，但保持PWM封锁，只记录结果。</li>
+      <li><strong>低压功率验证：</strong>在独立安全评审后依次验证PWM、死区、CPLD封锁、故障注入、低压开环和限流闭环。</li>
+    </ol>
+  </section>
+
+  <section id="appendix">
+    <h2>9. 版本与证据索引</h2>
+    <table><thead><tr><th>类别</th><th>位置/版本</th><th>说明</th></tr></thead><tbody>
+      <tr><td>DSP Git</td><td>GitHub DSP_PRJ；提交<code>b0eca6a</code>已合并</td><td>两路ADC与4 kHz固定时基PLL版本记录</td></tr>
+      <tr><td>CPLD Git</td><td>GitHub CPLD_PRJ；功能提交<code>7701840</code></td><td>配套STATCOM Modbus工程基线</td></tr>
+      <tr><td>DSP协议文档</td><td><code>docs/MODBUS_RTU_REGISTER_MAP.md</code></td><td>V0x0103双链路和29寄存器定义</td></tr>
+      <tr><td>CPLD构建</td><td><code>output_files/top.fit.summary</code>、<code>top.sta.summary</code></td><td>Quartus 13.1、器件/资源/时序证据</td></tr>
+      <tr><td>上位机测试</td><td><code>docs/statcom_host/tests/test_protocol.py</code></td><td>CRC、寄存器解析、维护密钥与版本兼容测试</td></tr>
+      <tr><td>安全状态</td><td>DSP <code>STATCOM_POWER_OUTPUT_ENABLED=0</code>；CPLD <code>top.v</code>输出常量</td><td>任何通信命令不能产生PWM</td></tr>
+    </tbody></table>
+    <p class="muted">本交底书基于2026-08-17本地源码、构建报告、测试结果和上板反馈整理。后续如果修改寄存器、引脚、极性、时钟、控制频率或安全输出，必须同步更新本文件和协议版本。</p>
+  </section>
+</main>
+<script>window.addEventListener("load",function(){if(window.WaveDrom)window.WaveDrom.ProcessAll();});</script>
+</body>
+</html>
